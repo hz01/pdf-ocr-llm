@@ -46,7 +46,7 @@ python main.py process document.pdf --model "Qwen2.5-VL-7B-Instruct" --output re
 
 ### System Dependencies
 
-Before installing Python dependencies, ensure you have the following system packages:
+Before installing Python dependencies, ensure you have Poppler installed:
 
 #### Ubuntu/Debian
 ```bash
@@ -60,8 +60,13 @@ brew install poppler
 ```
 
 #### Windows
-1. Download and install Poppler: https://github.com/oschwartz10612/poppler-windows/releases
-2. Add to your system PATH
+1. Download Poppler: https://github.com/oschwartz10612/poppler-windows/releases
+2. Extract and add to your system PATH
+
+#### Kaggle/Colab
+```bash
+!apt-get install -y poppler-utils
+```
 
 ### Python Dependencies
 
@@ -158,12 +163,14 @@ Then open your browser to `http://localhost:7860`
 - `--share` - Create public share link
 
 **Features:**
-- Upload and process PDFs
+- Upload and process single PDFs
+- Batch process multiple PDFs with ZIP download
 - Upload and process images  
 - Select models from dropdown
 - Custom prompts support
-- Download results as markdown files
-- Real-time status updates
+- Download results as markdown files or ZIP archives
+- Real-time progress tracking for batch processing
+- Clean markdown output without code fences
 
 ### REST API Only (FastAPI)
 
@@ -319,4 +326,75 @@ The project automatically distributes model layers across multiple GPUs when ava
 device:
   use_multi_gpu: true
   device_map: "auto"  # Automatic distribution
+```
+
+## Deployment Options
+
+### Local Development
+
+Run locally with all features:
+```bash
+python main.py serve
+```
+
+### Cloud Notebooks (Kaggle, Colab)
+
+Perfect for free GPU access with public sharing:
+
+**Kaggle Notebook:**
+```python
+# Clone and setup
+!git clone https://github.com/yourusername/pdf-ocr-llm.git
+%cd pdf-ocr-llm
+!pip install -r requirements.txt
+
+# Launch with public link
+!python main.py ui --share
+# Or both API + UI
+!python main.py serve --share
+```
+
+**Google Colab:**
+```python
+# Same as Kaggle
+!git clone https://github.com/yourusername/pdf-ocr-llm.git
+%cd pdf-ocr-llm
+!pip install -r requirements.txt
+
+# Launch with sharing enabled
+!python main.py ui --share
+```
+
+The `--share` flag creates a temporary public URL (valid for 72 hours) that you can access from anywhere.
+
+### Docker Deployment
+
+Using Docker Compose:
+```bash
+docker-compose up
+```
+
+Access at:
+- UI: `http://localhost:7860`
+- API: `http://localhost:8000`
+
+### HuggingFace Spaces
+
+Deploy as a permanent Gradio Space:
+
+1. Create a new Space on HuggingFace
+2. Push this repository
+3. Set `app_file: main.py` in your Space settings
+4. Add build command: `python main.py ui`
+
+### Production Server
+
+For production deployment with Nginx/Apache reverse proxy:
+```bash
+# Run API and UI on different ports
+python main.py api --host 0.0.0.0 --port 8000
+python main.py ui --host 0.0.0.0 --port 7860
+
+# Or use serve for both
+python main.py serve --api-port 8000 --ui-port 7860
 ```

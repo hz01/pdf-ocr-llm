@@ -20,6 +20,32 @@ models:
       type: "qwen25vl"
       max_pixels: 1280
       min_pixels: 256
+  
+  internvl:
+    - name: "InternVL3.5-1B-Instruct"
+      model_id: "OpenGVLab/InternVL3.5-1B-Instruct"
+      type: "internvl"
+    - name: "InternVL3.5-2B-Instruct"
+      model_id: "OpenGVLab/InternVL3.5-2B-Instruct"
+      type: "internvl"
+    - name: "InternVL3.5-4B-Instruct"
+      model_id: "OpenGVLab/InternVL3.5-4B-Instruct"
+      type: "internvl"
+    - name: "InternVL3.5-8B-Instruct"
+      model_id: "OpenGVLab/InternVL3.5-8B-Instruct"
+      type: "internvl"
+    - name: "InternVL3.5-14B-Instruct"
+      model_id: "OpenGVLab/InternVL3.5-14B-Instruct"
+      type: "internvl"
+    - name: "InternVL3.5-30B-A3B-Instruct"
+      model_id: "OpenGVLab/InternVL3.5-30B-A3B-Instruct"
+      type: "internvl"
+    - name: "InternVL3.5-38B-Instruct"
+      model_id: "OpenGVLab/InternVL3.5-38B-Instruct"
+      type: "internvl"
+    - name: "InternVL3.5-241B-A28B-Instruct"
+      model_id: "OpenGVLab/InternVL3.5-241B-A28B-Instruct"
+      type: "internvl"
 
 inference:
   batch_size: 1

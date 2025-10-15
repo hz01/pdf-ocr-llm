@@ -3,6 +3,7 @@ import logging
 
 from .base_model import BaseOCRModel
 from .qwen25vl_model import Qwen25VLModel
+from .internvl_model import InternVLModel
 
 logger = logging.getLogger(__name__)
 
@@ -11,7 +12,8 @@ class ModelFactory:
     """Factory class for creating OCR model instances."""
     
     MODEL_TYPES = {
-        'qwen25vl': Qwen25VLModel
+        'qwen25vl': Qwen25VLModel,
+        'internvl': InternVLModel
     }
     
     @staticmethod
