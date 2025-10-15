@@ -244,6 +244,9 @@ def _run_ui_process(host: str, port: int, share: bool = False) -> None:
 
 def launch_both(args) -> None:
     """Launch both API and UI servers together."""
+    # Set multiprocessing start method to 'spawn' for CUDA compatibility
+    multiprocessing.set_start_method('spawn', force=True)
+    
     print("\n" + "=" * 80)
     print("Starting PDF OCR Services")
     print("=" * 80)
