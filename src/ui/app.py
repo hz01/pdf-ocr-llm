@@ -70,13 +70,13 @@ def process_pdf(pdf_file, model_name, custom_prompt, dpi):
         os.unlink(temp_output_path)
         
         # Prepare status message
-        status = f"✅ Successfully processed {result.get('num_pages', 0)} pages in {result.get('processing_time', 0):.2f} seconds"
+        status = f"Successfully processed {result.get('num_pages', 0)} pages in {result.get('processing_time', 0):.2f} seconds"
         
         return markdown_text, status
         
     except Exception as e:
         logger.error(f"Error processing PDF: {e}")
-        return f"❌ Error: {str(e)}", f"❌ Processing failed: {str(e)}"
+        return f"Error: {str(e)}", f"Processing failed: {str(e)}"
 
 
 def process_image(image_file, model_name, custom_prompt):
@@ -121,18 +121,18 @@ def process_image(image_file, model_name, custom_prompt):
         os.unlink(temp_output_path)
         
         # Prepare status message
-        status = f"✅ Successfully processed image ({len(markdown_text)} characters extracted)"
+        status = f"Successfully processed image ({len(markdown_text)} characters extracted)"
         
         return markdown_text, status
         
     except Exception as e:
         logger.error(f"Error processing image: {e}")
-        return f"❌ Error: {str(e)}", f"❌ Processing failed: {str(e)}"
+        return f"Error: {str(e)}", f"Processing failed: {str(e)}"
 
 
 def download_markdown(markdown_text):
     """Create a downloadable markdown file."""
-    if not markdown_text or markdown_text.startswith("❌") or markdown_text.startswith("Please"):
+    if not markdown_text or markdown_text.startswith("Error") or markdown_text.startswith("Please"):
         return None
     
     with tempfile.NamedTemporaryFile(delete=False, suffix=".md", mode='w', encoding='utf-8') as f:
@@ -146,10 +146,10 @@ custom_theme = gr.themes.Soft(
     font_mono=[gr.themes.GoogleFont("IBM Plex Mono"), "ui-monospace", "Consolas", "monospace"],
 )
 
-with gr.Blocks(title="PDF OCR with Qwen 2.5 VL", theme=custom_theme) as demo:
+with gr.Blocks(title="PDF OCR with Vision Language Models", theme=custom_theme) as demo:
     gr.Markdown(
         """
-        # 📄 PDF OCR with Qwen 2.5 VL Models
+        # PDF OCR with Vision Language Models
         
         Extract text from PDFs and images using state-of-the-art vision-language models.
         """
@@ -157,7 +157,7 @@ with gr.Blocks(title="PDF OCR with Qwen 2.5 VL", theme=custom_theme) as demo:
     
     with gr.Tabs():
         # PDF Processing Tab
-        with gr.Tab("📄 PDF Processing"):
+        with gr.Tab("PDF Processing"):
             with gr.Row():
                 with gr.Column():
                     pdf_input = gr.File(
@@ -169,14 +169,14 @@ with gr.Blocks(title="PDF OCR with Qwen 2.5 VL", theme=custom_theme) as demo:
                         choices=available_models,
                         label="Select Model",
                         value=available_models[0] if available_models else None,
-                        info="Choose the Qwen 2.5 VL model to use"
+                        info="Choose the vision-language model to use"
                     )
                     pdf_prompt = gr.Textbox(
                         label="Custom Prompt (Optional)",
                         placeholder="Leave empty for default OCR prompt...",
                         lines=3
                     )
-                    pdf_button = gr.Button("🚀 Process PDF", variant="primary")
+                    pdf_button = gr.Button("Process PDF", variant="primary")
                 
                 with gr.Column():
                     pdf_status = gr.Textbox(label="Status", interactive=False)
@@ -200,7 +200,7 @@ with gr.Blocks(title="PDF OCR with Qwen 2.5 VL", theme=custom_theme) as demo:
             )
         
         # Image Processing Tab
-        with gr.Tab("🖼️ Image Processing"):
+        with gr.Tab("Image Processing"):
             with gr.Row():
                 with gr.Column():
                     image_input = gr.Image(
@@ -211,14 +211,14 @@ with gr.Blocks(title="PDF OCR with Qwen 2.5 VL", theme=custom_theme) as demo:
                         choices=available_models,
                         label="Select Model",
                         value=available_models[0] if available_models else None,
-                        info="Choose the Qwen 2.5 VL model to use"
+                        info="Choose the vision-language model to use"
                     )
                     image_prompt = gr.Textbox(
                         label="Custom Prompt (Optional)",
                         placeholder="Leave empty for default OCR prompt...",
                         lines=3
                     )
-                    image_button = gr.Button("🚀 Process Image", variant="primary")
+                    image_button = gr.Button("Process Image", variant="primary")
                 
                 with gr.Column():
                     image_status = gr.Textbox(label="Status", interactive=False)
@@ -242,7 +242,7 @@ with gr.Blocks(title="PDF OCR with Qwen 2.5 VL", theme=custom_theme) as demo:
             )
         
         # Information Tab
-        with gr.Tab("ℹ️ Information"):
+        with gr.Tab("Information"):
             gr.Markdown(
                 f"""
                 ## Available Models
@@ -251,11 +251,11 @@ with gr.Blocks(title="PDF OCR with Qwen 2.5 VL", theme=custom_theme) as demo:
                 
                 ## Features
                 
-                - 📄 **PDF Processing**: Convert PDF pages to images and extract text
-                - 🖼️ **Image Processing**: Extract text from images directly
-                - 🎯 **Custom Prompts**: Provide specific instructions for extraction
-                - 📝 **Markdown Output**: Results in clean, formatted markdown
-                - ⬇️ **Download**: Save results as `.md` files
+                - **PDF Processing**: Convert PDF pages to images and extract text
+                - **Image Processing**: Extract text from images directly
+                - **Custom Prompts**: Provide specific instructions for extraction
+                - **Markdown Output**: Results in clean, formatted markdown
+                - **Download**: Save results as `.md` files
                 
                 ## Tips
                 
@@ -281,9 +281,9 @@ with gr.Blocks(title="PDF OCR with Qwen 2.5 VL", theme=custom_theme) as demo:
     gr.Markdown(
         """
         ---
-        ### 🔧 Technical Details
+        ### Technical Details
         
-        This application uses Qwen 2.5 VL (Vision-Language) models for OCR tasks.
+        This application uses vision-language models for OCR tasks.
         Models are loaded on-demand and cached for faster subsequent processing.
         """
     )

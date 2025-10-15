@@ -1,18 +1,18 @@
-# PDF OCR with Large Language Models
+# PDF OCR with Vision Language Models
 
-A professional PDF OCR system that leverages state-of-the-art Large Language Models for high-quality text extraction. This project uses Qwen 2.5 VL vision-language models with built-in multi-GPU acceleration support.
+A professional PDF OCR system that leverages state-of-the-art vision-language models for high-quality text extraction with built-in multi-GPU acceleration support.
 
 ## Features
 
-- **🤖 State-of-the-art Models**: Qwen 2.5 VL vision-language models (3B, 7B, 32B, 72B)
-- **🌐 Web UI**: User-friendly Gradio interface for easy interaction
-- **🚀 REST API**: FastAPI backend for programmatic access
-- **💻 CLI**: Command-line interface for automation
-- **📝 Markdown Output**: Preserves document structure and formatting
-- **🎯 Custom Prompts**: Flexible prompt engineering for specific tasks
-- **⚡ Multi-GPU Support**: Automatic device distribution for large models
-- **📦 Batch Processing**: Process multiple files efficiently
-- **🔄 HuggingFace Integration**: Automatic model downloading and caching
+- **State-of-the-art Models**: Vision-language models (Qwen 2.5 VL: 3B, 7B, 32B, 72B)
+- **Web UI**: User-friendly Gradio interface for easy interaction
+- **REST API**: FastAPI backend for programmatic access
+- **CLI**: Command-line interface for automation
+- **Markdown Output**: Preserves document structure and formatting
+- **Custom Prompts**: Flexible prompt engineering for specific tasks
+- **Multi-GPU Support**: Automatic device distribution for large models
+- **Batch Processing**: Process multiple files efficiently
+- **HuggingFace Integration**: Automatic model downloading and caching
 
 ## Quick Start
 
@@ -153,12 +153,12 @@ Then open your browser to `http://localhost:7860`
 - `--share` - Create public share link
 
 **Features:**
-- 📄 Upload and process PDFs
-- 🖼️ Upload and process images  
-- 🎯 Select models from dropdown
-- 📝 Custom prompts support
-- ⬇️ Download results as markdown files
-- 💡 Real-time status updates
+- Upload and process PDFs
+- Upload and process images  
+- Select models from dropdown
+- Custom prompts support
+- Download results as markdown files
+- Real-time status updates
 
 ### REST API Only (FastAPI)
 
@@ -174,7 +174,7 @@ API will be available at `http://localhost:8000`
 - `--host HOST` - Server host (default: 0.0.0.0)
 - `--port PORT` - Server port (default: 8000)
 
-**API Endpoints:**
+**Endpoints:**
 
 - `GET /models` - List available models
 - `POST /process/pdf` - Process a PDF file
