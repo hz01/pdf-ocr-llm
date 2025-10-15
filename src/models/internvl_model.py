@@ -58,10 +58,13 @@ class InternVLModel(BaseOCRModel):
             # Get device configuration
             model_kwargs = self.device_manager.get_model_kwargs()
             
+            # Set default dtype if not already specified
+            if 'torch_dtype' not in model_kwargs:
+                model_kwargs['torch_dtype'] = torch.bfloat16
+            
             # Load model - InternVL uses AutoModel, not AutoModelForVision2Seq
             self.model = AutoModel.from_pretrained(
                 self.model_config['model_id'],
-                torch_dtype=torch.bfloat16,
                 trust_remote_code=True,
                 token=hf_token,
                 **model_kwargs
