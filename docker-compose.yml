@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  pdf-ocr-llm:
+    build: .
+    image: pdf-ocr-llm:latest
+    container_name: pdf-ocr-llm
+    
+    # GPU support (requires nvidia-docker)
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    
+    volumes:
+      # Mount input/output directories
+      - ./input:/app/input
+      - ./output:/app/output
+      # Mount model cache to avoid re-downloading
+      - ./cache:/app/.cache/huggingface
+    
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - TRANSFORMERS_CACHE=/app/.cache/huggingface
+    
+    # Override command to process files from input directory
+    command: python main.py batch --model "Qwen2.5-VL-7B" --input-dir /app/input --output-dir /app/output
+    
+    # Keep container running for interactive use
+    # stdin_open: true
+    # tty: true
+

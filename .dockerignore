@@ -4,37 +4,23 @@ __pycache__/
 *$py.class
 *.so
 .Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
 *.egg-info/
-.installed.cfg
-*.egg
+dist/
+build/
 
 # Virtual environments
 venv/
 env/
 ENV/
-.venv
 
 # IDEs
 .vscode/
 .idea/
 *.swp
-*.swo
-*~
 
-# Jupyter Notebook
-.ipynb_checkpoints
+# Git
+.git/
+.gitignore
 
 # Model caches
 .cache/
@@ -43,15 +29,23 @@ checkpoints/
 
 # Output files
 output/
-*_ocr.md
-*_ocr.txt
+temp_images/
+*_images/
 *.log
+
+# Documentation
+*.md
+docs/
+
+# Tests
+tests/
+.pytest_cache/
+
+# CI/CD
+.github/
+.gitlab-ci.yml
 
 # OS
 .DS_Store
 Thumbs.db
 
-# Project specific
-temp_images/
-*_images/
-*_ocr.txt
