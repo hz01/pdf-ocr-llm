@@ -231,14 +231,14 @@ def _run_api_process(host: str, port: int, log_level: str) -> None:
     )
 
 
-def _run_ui_process(host: str, port: int) -> None:
+def _run_ui_process(host: str, port: int, share: bool = False) -> None:
     """Helper function to run UI in a separate process."""
     from src.ui.app import demo
     
     demo.launch(
         server_name=host,
         server_port=port,
-        share=False
+        share=share
     )
 
 
@@ -250,6 +250,8 @@ def launch_both(args) -> None:
     print(f"Web UI:  http://{args.ui_host}:{args.ui_port}")
     print(f"API:     http://{args.api_host}:{args.api_port}")
     print(f"API Docs: http://{args.api_host}:{args.api_port}/docs")
+    if args.share:
+        print("Share:   Public link will be generated")
     print("\nPress Ctrl+C to stop all services")
     print("=" * 80 + "\n")
     
@@ -260,7 +262,7 @@ def launch_both(args) -> None:
     )
     ui_process = multiprocessing.Process(
         target=_run_ui_process,
-        args=(args.ui_host, args.ui_port)
+        args=(args.ui_host, args.ui_port, args.share)
     )
     
     try:
@@ -354,6 +356,7 @@ def main():
     serve_parser.add_argument("--api-port", type=int, default=8000, help="API port number (default: 8000)")
     serve_parser.add_argument("--ui-host", type=str, default="0.0.0.0", help="UI host address (default: 0.0.0.0)")
     serve_parser.add_argument("--ui-port", type=int, default=7860, help="UI port number (default: 7860)")
+    serve_parser.add_argument("--share", action="store_true", help="Create public share link for UI")
     
     args = parser.parse_args()
     
