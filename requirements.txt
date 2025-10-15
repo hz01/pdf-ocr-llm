@@ -8,6 +8,13 @@ accelerate>=0.27.0
 qwen-vl-utils>=0.0.1
 sentencepiece>=0.1.99
 protobuf>=3.20.0
+python-dotenv>=1.0.0
+
+# API and UI dependencies
+fastapi>=0.104.0
+uvicorn>=0.24.0
+gradio>=4.0.0
+python-multipart>=0.0.6
 
 # System dependencies (install separately):
 # - poppler-utils (for pdf2image)

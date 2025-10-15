@@ -38,10 +38,10 @@ class TestConfigManager(unittest.TestCase):
     
     def test_get_model_by_name(self):
         """Test retrieving a specific model by name."""
-        model = self.config_manager.get_model_by_name("Qwen2.5-VL-7B")
+        model = self.config_manager.get_model_by_name("Qwen2.5-VL-7B-Instruct")
         self.assertIsNotNone(model)
-        self.assertEqual(model['name'], "Qwen2.5-VL-7B")
-        self.assertEqual(model['type'], "qwen2vl")
+        self.assertEqual(model['name'], "Qwen2.5-VL-7B-Instruct")
+        self.assertEqual(model['type'], "qwen25vl")
     
     def test_get_nonexistent_model(self):
         """Test retrieving a non-existent model."""
@@ -50,12 +50,12 @@ class TestConfigManager(unittest.TestCase):
     
     def test_get_models_by_type(self):
         """Test retrieving models by type."""
-        qwen_models = self.config_manager.get_models_by_type("qwen2vl")
+        qwen_models = self.config_manager.get_models_by_type("qwen25vl")
         self.assertIsInstance(qwen_models, list)
         self.assertGreater(len(qwen_models), 0)
         
         for model in qwen_models:
-            self.assertEqual(model['type'], "qwen2vl")
+            self.assertEqual(model['type'], "qwen25vl")
     
     def test_get_inference_config(self):
         """Test retrieving inference configuration."""

@@ -27,7 +27,7 @@ services:
       - TRANSFORMERS_CACHE=/app/.cache/huggingface
     
     # Override command to process files from input directory
-    command: python main.py batch --model "Qwen2.5-VL-7B" --input-dir /app/input --output-dir /app/output
+    command: python main.py batch --model "Qwen2.5-VL-7B-Instruct" --input-dir /app/input --output-dir /app/output
     
     # Keep container running for interactive use
     # stdin_open: true

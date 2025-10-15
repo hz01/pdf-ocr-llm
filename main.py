@@ -2,6 +2,8 @@ import argparse
 import logging
 from pathlib import Path
 import sys
+import multiprocessing
+import time
 
 from src.pipeline.ocr_pipeline import OCRPipeline
 
@@ -177,6 +179,113 @@ def process_batch(args) -> None:
     pipeline.cleanup()
 
 
+def launch_ui(args) -> None:
+    """Launch the Gradio web UI."""
+    from src.ui.app import demo
+    
+    print("\n" + "=" * 80)
+    print("Starting Gradio Web UI")
+    print("=" * 80)
+    print(f"Server: http://{args.host}:{args.port}")
+    print("Press Ctrl+C to stop")
+    print("=" * 80 + "\n")
+    
+    demo.launch(
+        server_name=args.host,
+        server_port=args.port,
+        share=args.share
+    )
+
+
+def launch_api(args) -> None:
+    """Launch the FastAPI REST API server."""
+    import uvicorn
+    from src.api.app import app
+    
+    print("\n" + "=" * 80)
+    print("Starting FastAPI REST API")
+    print("=" * 80)
+    print(f"Server: http://{args.host}:{args.port}")
+    print(f"API Docs: http://{args.host}:{args.port}/docs")
+    print("Press Ctrl+C to stop")
+    print("=" * 80 + "\n")
+    
+    uvicorn.run(
+        app,
+        host=args.host,
+        port=args.port,
+        log_level=args.log_level.lower()
+    )
+
+
+def _run_api_process(host: str, port: int, log_level: str) -> None:
+    """Helper function to run API in a separate process."""
+    import uvicorn
+    from src.api.app import app
+    
+    uvicorn.run(
+        app,
+        host=host,
+        port=port,
+        log_level=log_level.lower()
+    )
+
+
+def _run_ui_process(host: str, port: int) -> None:
+    """Helper function to run UI in a separate process."""
+    from src.ui.app import demo
+    
+    demo.launch(
+        server_name=host,
+        server_port=port,
+        share=False
+    )
+
+
+def launch_both(args) -> None:
+    """Launch both API and UI servers together."""
+    print("\n" + "=" * 80)
+    print("Starting PDF OCR Services")
+    print("=" * 80)
+    print(f"Web UI:  http://{args.ui_host}:{args.ui_port}")
+    print(f"API:     http://{args.api_host}:{args.api_port}")
+    print(f"API Docs: http://{args.api_host}:{args.api_port}/docs")
+    print("\nPress Ctrl+C to stop all services")
+    print("=" * 80 + "\n")
+    
+    # Create processes for API and UI
+    api_process = multiprocessing.Process(
+        target=_run_api_process,
+        args=(args.api_host, args.api_port, args.log_level)
+    )
+    ui_process = multiprocessing.Process(
+        target=_run_ui_process,
+        args=(args.ui_host, args.ui_port)
+    )
+    
+    try:
+        # Start both processes
+        api_process.start()
+        time.sleep(2)  # Give API a moment to start
+        ui_process.start()
+        
+        # Wait for both processes
+        api_process.join()
+        ui_process.join()
+        
+    except KeyboardInterrupt:
+        print("\n\nShutting down services...")
+        api_process.terminate()
+        ui_process.terminate()
+        api_process.join()
+        ui_process.join()
+        print("All services stopped.")
+    except Exception as e:
+        print(f"\nError: {e}")
+        api_process.terminate()
+        ui_process.terminate()
+
+
 def main():
     """Main entry point for the PDF OCR application."""
     parser = argparse.ArgumentParser(
@@ -228,6 +337,24 @@ def main():
     batch_parser.add_argument("--output-dir", type=str, required=True, help="Directory to save outputs")
     batch_parser.add_argument("--prompt", type=str, help="Custom prompt for the model")
     
+    # Web UI command
+    ui_parser = subparsers.add_parser("ui", help="Launch Gradio web interface")
+    ui_parser.add_argument("--host", type=str, default="0.0.0.0", help="Host address (default: 0.0.0.0)")
+    ui_parser.add_argument("--port", type=int, default=7860, help="Port number (default: 7860)")
+    ui_parser.add_argument("--share", action="store_true", help="Create public share link")
+    
+    # API command
+    api_parser = subparsers.add_parser("api", help="Launch FastAPI REST API server")
+    api_parser.add_argument("--host", type=str, default="0.0.0.0", help="Host address (default: 0.0.0.0)")
+    api_parser.add_argument("--port", type=int, default=8000, help="Port number (default: 8000)")
+    
+    # Serve both API and UI
+    serve_parser = subparsers.add_parser("serve", help="Launch both API and UI servers")
+    serve_parser.add_argument("--api-host", type=str, default="0.0.0.0", help="API host address (default: 0.0.0.0)")
+    serve_parser.add_argument("--api-port", type=int, default=8000, help="API port number (default: 8000)")
+    serve_parser.add_argument("--ui-host", type=str, default="0.0.0.0", help="UI host address (default: 0.0.0.0)")
+    serve_parser.add_argument("--ui-port", type=int, default=7860, help="UI port number (default: 7860)")
+    
     args = parser.parse_args()
     
     # Setup logging
@@ -240,6 +367,12 @@ def main():
         process_file(args)
     elif args.command == "batch":
         process_batch(args)
+    elif args.command == "ui":
+        launch_ui(args)
+    elif args.command == "api":
+        launch_api(args)
+    elif args.command == "serve":
+        launch_both(args)
     else:
         parser.print_help()
         sys.exit(1)

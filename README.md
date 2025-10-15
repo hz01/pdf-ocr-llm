@@ -4,16 +4,39 @@ A professional PDF OCR system that leverages state-of-the-art Large Language Mod
 
 ## Features
 
-- State-of-the-art Qwen 2.5 VL vision-language models:
-  - 2B, 7B, and 72B parameter variants
-- Markdown output format preserving document structure
-- Multi-GPU support with automatic device distribution
-- Professional class-based architecture
-- Batch processing capabilities
-- PDF to image conversion with configurable DPI
-- Command-line interface for easy usage
-- Configurable model selection via YAML
-- Progress tracking and detailed logging
+- **🤖 State-of-the-art Models**: Qwen 2.5 VL vision-language models (3B, 7B, 32B, 72B)
+- **🌐 Web UI**: User-friendly Gradio interface for easy interaction
+- **🚀 REST API**: FastAPI backend for programmatic access
+- **💻 CLI**: Command-line interface for automation
+- **📝 Markdown Output**: Preserves document structure and formatting
+- **🎯 Custom Prompts**: Flexible prompt engineering for specific tasks
+- **⚡ Multi-GPU Support**: Automatic device distribution for large models
+- **📦 Batch Processing**: Process multiple files efficiently
+- **🔄 HuggingFace Integration**: Automatic model downloading and caching
+
+## Quick Start
+
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Set up HuggingFace token (optional)
+cp env.example .env
+# Edit .env and add your HF_TOKEN
+
+# Launch both Web UI and API together (recommended)
+python main.py serve
+# Web UI:  http://localhost:7860
+# API:     http://localhost:8000
+# API Docs: http://localhost:8000/docs
+
+# Or launch individually
+python main.py ui        # Just the Web UI
+python main.py api       # Just the API
+
+# Or use CLI for direct processing
+python main.py process document.pdf --model "Qwen2.5-VL-7B-Instruct" --output result.md
+```
 
 ## Installation
 
@@ -55,6 +78,22 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
+4. Set up environment variables (optional but recommended for HuggingFace authentication):
+```bash
+# Copy the example file
+cp env.example .env
+
+# Edit .env and add your HuggingFace token
+# Get your token from: https://huggingface.co/settings/tokens
+```
+
+Your `.env` file should contain:
+```
+HF_TOKEN=your_huggingface_token_here
+```
+
+**Note:** The HuggingFace token is required if you're accessing gated models or private repositories. For public models, it's optional but recommended.
+
 ## Configuration
 
 The project uses a YAML configuration file (`config.yaml`) to manage models and settings. You can customize:
@@ -67,10 +106,10 @@ The project uses a YAML configuration file (`config.yaml`) to manage models and 
 Example configuration structure:
 ```yaml
 models:
-  qwen2vl:
-    - name: "Qwen2.5-VL-7B"
+  qwen25vl:
+    - name: "Qwen2.5-VL-7B-Instruct"
       model_id: "Qwen/Qwen2.5-VL-7B-Instruct"
-      type: "qwen2vl"
+      type: "qwen25vl"
       
 device:
   use_multi_gpu: true
@@ -79,7 +118,91 @@ device:
 
 ## Usage
 
-### List Available Models
+### Serve Both UI & API (Recommended)
+
+Launch both the web interface and API server together:
+
+```bash
+python main.py serve
+```
+
+This starts:
+- **Web UI** at `http://localhost:7860` - Interactive interface
+- **REST API** at `http://localhost:8000` - Programmatic access
+- **API Docs** at `http://localhost:8000/docs` - Interactive API documentation
+
+**Options:**
+- `--api-host HOST` - API server host (default: 0.0.0.0)
+- `--api-port PORT` - API server port (default: 8000)
+- `--ui-host HOST` - UI server host (default: 0.0.0.0)
+- `--ui-port PORT` - UI server port (default: 7860)
+
+### Web UI Only (Gradio)
+
+The easiest way to use the application is through the web interface:
+
+```bash
+python main.py ui
+```
+
+Then open your browser to `http://localhost:7860`
+
+**Options:**
+- `--host HOST` - Server host (default: 0.0.0.0)
+- `--port PORT` - Server port (default: 7860)
+- `--share` - Create public share link
+
+**Features:**
+- 📄 Upload and process PDFs
+- 🖼️ Upload and process images  
+- 🎯 Select models from dropdown
+- 📝 Custom prompts support
+- ⬇️ Download results as markdown files
+- 💡 Real-time status updates
+
+### REST API Only (FastAPI)
+
+Run just the API server:
+
+```bash
+python main.py api
+```
+
+API will be available at `http://localhost:8000`
+
+**Options:**
+- `--host HOST` - Server host (default: 0.0.0.0)
+- `--port PORT` - Server port (default: 8000)
+
+**API Endpoints:**
+
+- `GET /models` - List available models
+- `POST /process/pdf` - Process a PDF file
+- `POST /process/image` - Process an image file
+- `GET /health` - Health check
+
+**Example API Usage:**
+
+```python
+import requests
+
+# List models
+response = requests.get("http://localhost:8000/models")
+print(response.json())
+
+# Process PDF
+with open("document.pdf", "rb") as f:
+    files = {"file": f}
+    data = {"model_name": "Qwen2.5-VL-7B-Instruct"}
+    response = requests.post("http://localhost:8000/process/pdf", files=files, data=data)
+    print(response.json()["markdown"])
+```
+
+**Interactive API Docs:** Visit `http://localhost:8000/docs` for Swagger UI
+
+### Command Line Interface
+
+#### List Available Models
 
 View all configured models:
 ```bash
@@ -90,45 +213,45 @@ python main.py list-models
 
 Extract text from a PDF file to Markdown:
 ```bash
-python main.py process input.pdf --model "Qwen2.5-VL-7B" --output output.md
+python main.py process input.pdf --model "Qwen2.5-VL-7B-Instruct" --output output.md
 ```
 
 Save intermediate images:
 ```bash
-python main.py process input.pdf --model "Qwen2.5-VL-7B" --save-images --images-dir ./images
+python main.py process input.pdf --model "Qwen2.5-VL-7B-Instruct" --save-images --images-dir ./images
 ```
 
 ### Process a Single Image
 
 Extract text from an image file to Markdown:
 ```bash
-python main.py process image.png --model "Qwen2.5-VL-7B" --output output.md
+python main.py process image.png --model "Qwen2.5-VL-7B-Instruct" --output output.md
 ```
 
 ### Batch Processing
 
 Process multiple files at once:
 ```bash
-python main.py batch --model "Qwen2.5-VL-7B" --input-dir ./pdfs --output-dir ./outputs
+python main.py batch --model "Qwen2.5-VL-7B-Instruct" --input-dir ./pdfs --output-dir ./outputs
 ```
 
 Process specific files:
 ```bash
-python main.py batch --model "Qwen2.5-VL-7B" --input-files file1.pdf file2.pdf --output-dir ./outputs
+python main.py batch --model "Qwen2.5-VL-7B-Instruct" --input-files file1.pdf file2.pdf --output-dir ./outputs
 ```
 
 ### Custom Prompts
 
 Use a custom prompt for better context:
 ```bash
-python main.py process invoice.pdf --model "Qwen2.5-VL-7B" --prompt "Extract all text from this invoice, preserving table structure"
+python main.py process invoice.pdf --model "Qwen2.5-VL-7B-Instruct" --prompt "Extract all text from this invoice, preserving table structure"
 ```
 
 ### Show Device Information
 
 Display available GPUs:
 ```bash
-python main.py process input.pdf --model "Qwen2.5-VL-7B" --show-device-info
+python main.py process input.pdf --model "Qwen2.5-VL-7B-Instruct" --show-device-info
 ```
 
 ## Project Structure
@@ -192,81 +315,3 @@ device:
   use_multi_gpu: true
   device_map: "auto"  # Automatic distribution
 ```
-
-## Performance Tips
-
-1. **GPU Memory**: Use smaller models (2B, 7B) if running out of memory
-2. **Batch Size**: Adjust in config.yaml based on available memory
-3. **DPI**: Lower DPI (150-200) for faster processing, higher (300+) for better quality
-4. **Multi-GPU**: Enable for large models (72B) or batch processing
-
-## Troubleshooting
-
-### CUDA Out of Memory
-
-- Use a smaller model variant
-- Reduce batch_size in config.yaml
-- Enable multi-GPU mode
-- Close other GPU-intensive applications
-
-### PDF Conversion Fails
-
-- Ensure poppler-utils is installed
-- Check PDF file is not corrupted
-- Try reducing DPI in config.yaml
-
-### Model Download Issues
-
-- Ensure you have internet connection
-- Check Hugging Face Hub accessibility
-- Models are cached in `~/.cache/huggingface/`
-
-## Contributing
-
-Contributions are welcome! Please follow these guidelines:
-
-1. Follow PEP 8 style guide
-2. Add docstrings to all classes and methods
-3. Include type hints
-4. Write unit tests for new features
-5. Update documentation
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Acknowledgments
-
-- Qwen team at Alibaba Cloud for the Qwen 2.5 VL models
-- Hugging Face for the transformers library
-- pdf2image contributors
-
-## Citation
-
-If you use this project in your research, please cite:
-
-```bibtex
-@software{pdf_ocr_llm,
-  title={PDF OCR with Large Language Models},
-  author={Your Name},
-  year={2024},
-  url={https://github.com/yourusername/pdf-ocr-llm}
-}
-```
-
-## Support
-
-For issues, questions, or contributions:
-- Open an issue on GitHub
-- Check existing issues for solutions
-- Review documentation thoroughly
-
-## Changelog
-
-### Version 1.0.0
-- Initial release
-- Support for Qwen 2.5 VL (2B, 7B, 72B)
-- Multi-GPU support
-- Markdown output format
-- Batch processing capabilities
-- Command-line interface
