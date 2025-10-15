@@ -30,8 +30,12 @@ python main.py serve
 # API:     http://localhost:8000
 # API Docs: http://localhost:8000/docs
 
+# With public share link (for Kaggle, Colab, remote access)
+python main.py serve --share
+
 # Or launch individually
 python main.py ui        # Just the Web UI
+python main.py ui --share # With public link
 python main.py api       # Just the API
 
 # Or use CLI for direct processing
@@ -136,6 +140,7 @@ This starts:
 - `--api-port PORT` - API server port (default: 8000)
 - `--ui-host HOST` - UI server host (default: 0.0.0.0)
 - `--ui-port PORT` - UI server port (default: 7860)
+- `--share` - Create public share link for UI (useful for remote access)
 
 ### Web UI Only (Gradio)
 
