@@ -1,7 +1,7 @@
 from typing import Any, Dict, List, Optional
 from PIL import Image
 import torch
-from transformers import AutoModelForVision2Seq, AutoTokenizer
+from transformers import AutoModel, AutoTokenizer
 import logging
 import os
 from dotenv import load_dotenv
@@ -58,9 +58,10 @@ class InternVLModel(BaseOCRModel):
             # Get device configuration
             model_kwargs = self.device_manager.get_model_kwargs()
             
-            # Load model
-            self.model = AutoModelForVision2Seq.from_pretrained(
+            # Load model - InternVL uses AutoModel, not AutoModelForVision2Seq
+            self.model = AutoModel.from_pretrained(
                 self.model_config['model_id'],
+                torch_dtype=torch.bfloat16,
                 trust_remote_code=True,
                 token=hf_token,
                 **model_kwargs
@@ -93,36 +94,55 @@ class InternVLModel(BaseOCRModel):
         if prompt is None:
             prompt = "Extract all text from this image. Preserve the layout, formatting, tables, and structure. Use Markdown syntax for headings, lists, tables, bold, italic, etc. Output only the formatted text without code blocks or fences."
         
-        # Prepare inputs
-        inputs = self.tokenizer(
-            text=prompt,
-            images=image,
-            return_tensors="pt"
+        # Use InternVL's chat interface
+        generation_config = dict(
+            max_new_tokens=self.inference_config.get('max_new_tokens', 2048),
+            do_sample=True if self.inference_config.get('temperature', 0.1) > 0 else False,
+            temperature=self.inference_config.get('temperature', 0.1),
+            top_p=self.inference_config.get('top_p', 0.9),
         )
         
-        # Move inputs to device
-        device = next(self.model.parameters()).device
-        inputs = {k: v.to(device) if isinstance(v, torch.Tensor) else v for k, v in inputs.items()}
-        
-        # Generate
-        with torch.no_grad():
-            generated_ids = self.model.generate(
-                **inputs,
-                max_new_tokens=self.inference_config.get('max_new_tokens', 2048),
-                temperature=self.inference_config.get('temperature', 0.1),
-                top_p=self.inference_config.get('top_p', 0.9),
+        # InternVL models typically have a chat method
+        try:
+            output_text = self.model.chat(
+                self.tokenizer,
+                pixel_values=None,
+                question=prompt,
+                generation_config=generation_config,
+                history=None,
+                return_history=False,
+                IMG_CONTEXT_TOKEN='<IMG_CONTEXT>',
+                IMG_START_TOKEN='<img>',
+                IMG_END_TOKEN='</img>',
+                verbose=False,
+                image=image
             )
-        
-        # Decode output
-        output_text = self.tokenizer.decode(
-            generated_ids[0],
-            skip_special_tokens=True,
-            clean_up_tokenization_spaces=False
-        )
-        
-        # Remove the prompt from output if present
-        if prompt in output_text:
-            output_text = output_text.replace(prompt, "").strip()
+        except AttributeError:
+            # Fallback to standard generation if chat method not available
+            logger.warning("Model doesn't have chat method, using standard generation")
+            pixel_values = self.model.extract_feature(image)
+            question = f"<image>\n{prompt}"
+            
+            input_ids = self.tokenizer(question, return_tensors='pt').input_ids
+            device = next(self.model.parameters()).device
+            input_ids = input_ids.to(device)
+            
+            with torch.no_grad():
+                generated_ids = self.model.generate(
+                    input_ids=input_ids,
+                    pixel_values=pixel_values.to(device) if pixel_values is not None else None,
+                    **generation_config
+                )
+            
+            output_text = self.tokenizer.decode(
+                generated_ids[0],
+                skip_special_tokens=True,
+                clean_up_tokenization_spaces=False
+            )
+            
+            # Remove the prompt from output if present
+            if prompt in output_text:
+                output_text = output_text.replace(prompt, "").strip()
         
         # Clean up markdown code fences if present
         output_text = self._clean_code_fences(output_text)
