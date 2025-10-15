@@ -10,6 +10,8 @@ import tempfile
 import os
 from pathlib import Path
 import logging
+import zipfile
+from datetime import datetime
 
 from src.pipeline.ocr_pipeline import OCRPipeline
 
@@ -140,6 +142,86 @@ def download_markdown(markdown_text):
         return f.name
 
 
+def process_batch_pdfs(pdf_files, model_name):
+    """
+    Process multiple PDF files and create a zip with results.
+    
+    Args:
+        pdf_files: List of uploaded PDF files
+        model_name: Selected model name
+    
+    Returns:
+        Tuple of (zip_file_path, status_message)
+    """
+    if not pdf_files or len(pdf_files) == 0:
+        return None, "Please upload at least one PDF file."
+    
+    if not model_name:
+        return None, "Please select a model."
+    
+    try:
+        # Create temp directory for outputs
+        output_dir = tempfile.mkdtemp()
+        results = []
+        
+        logger.info(f"Processing {len(pdf_files)} PDFs with model: {model_name}")
+        
+        # Process each PDF
+        for idx, pdf_file in enumerate(pdf_files, 1):
+            try:
+                # Get original filename without extension
+                pdf_name = Path(pdf_file.name).stem
+                output_path = os.path.join(output_dir, f"{pdf_name}.md")
+                
+                # Process PDF
+                result = pipeline.process_pdf(
+                    pdf_path=pdf_file.name,
+                    model_name=model_name,
+                    output_path=output_path
+                )
+                
+                results.append({
+                    'file': pdf_name,
+                    'pages': result.get('num_pages', 0),
+                    'status': 'Success'
+                })
+                
+            except Exception as e:
+                logger.error(f"Error processing {pdf_file.name}: {e}")
+                results.append({
+                    'file': Path(pdf_file.name).stem,
+                    'pages': 0,
+                    'status': f'Failed: {str(e)}'
+                })
+        
+        # Create zip file
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        zip_path = os.path.join(output_dir, f"ocr_results_{timestamp}.zip")
+        
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for md_file in Path(output_dir).glob("*.md"):
+                zipf.write(md_file, md_file.name)
+        
+        # Prepare status message
+        success_count = sum(1 for r in results if r['status'] == 'Success')
+        total_pages = sum(r['pages'] for r in results)
+        
+        status = f"Processed {success_count}/{len(pdf_files)} PDFs successfully\n"
+        status += f"Total pages: {total_pages}\n\n"
+        status += "Files:\n"
+        for r in results:
+            status += f"- {r['file']}: {r['status']}"
+            if r['pages'] > 0:
+                status += f" ({r['pages']} pages)"
+            status += "\n"
+        
+        return zip_path, status
+        
+    except Exception as e:
+        logger.error(f"Error in batch processing: {e}")
+        return None, f"Batch processing failed: {str(e)}"
+
+
 # Create Gradio interface with custom theme
 custom_theme = gr.themes.Soft(
     font=[gr.themes.GoogleFont("Inter"), "ui-sans-serif", "system-ui", "sans-serif"],
@@ -199,6 +281,38 @@ with gr.Blocks(title="PDF OCR with Vision Language Models", theme=custom_theme) 
                 outputs=[pdf_download]
             )
         
+        # Batch PDF Processing Tab
+        with gr.Tab("Batch PDF Processing"):
+            with gr.Row():
+                with gr.Column():
+                    batch_input = gr.File(
+                        label="Upload PDFs",
+                        file_types=[".pdf"],
+                        file_count="multiple",
+                        type="filepath"
+                    )
+                    batch_model = gr.Dropdown(
+                        choices=available_models,
+                        label="Select Model",
+                        value=available_models[0] if available_models else None,
+                        info="Choose the vision-language model to use"
+                    )
+                    batch_button = gr.Button("Process All PDFs", variant="primary")
+                
+                with gr.Column():
+                    batch_status = gr.Textbox(
+                        label="Processing Status",
+                        lines=15,
+                        interactive=False
+                    )
+                    batch_download = gr.File(label="Download Results (ZIP)")
+            
+            batch_button.click(
+                fn=process_batch_pdfs,
+                inputs=[batch_input, batch_model],
+                outputs=[batch_download, batch_status]
+            )
+        
         # Image Processing Tab
         with gr.Tab("Image Processing"):
             with gr.Row():
@@ -252,10 +366,11 @@ with gr.Blocks(title="PDF OCR with Vision Language Models", theme=custom_theme) 
                 ## Features
                 
                 - **PDF Processing**: Convert PDF pages to images and extract text
+                - **Batch PDF Processing**: Process multiple PDFs at once, download results as ZIP
                 - **Image Processing**: Extract text from images directly
                 - **Custom Prompts**: Provide specific instructions for extraction
                 - **Markdown Output**: Results in clean, formatted markdown
-                - **Download**: Save results as `.md` files
+                - **Download**: Save results as `.md` files or ZIP archives
                 
                 ## Tips
                 
