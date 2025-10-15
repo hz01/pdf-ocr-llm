@@ -41,7 +41,6 @@ ENV/
 
 # Model caches
 .cache/
-models/
 checkpoints/
 
 # Output files
