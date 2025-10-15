@@ -47,7 +47,8 @@ class Qwen25VLModel(BaseOCRModel):
                 trust_remote_code=True,
                 max_pixels=self.max_pixels * 28 * 28,
                 min_pixels=self.min_pixels * 28 * 28,
-                token=hf_token
+                token=hf_token,
+                use_fast=False  # Avoid fast tokenizer issues
             )
             
             # Get device configuration
