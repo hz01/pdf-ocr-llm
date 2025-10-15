@@ -4,14 +4,17 @@ A professional PDF OCR system that leverages state-of-the-art vision-language mo
 
 ## Features
 
-- **State-of-the-art Models**: Vision-language models (Qwen 2.5 VL: 3B, 7B, 32B, 72B)
-- **Web UI**: User-friendly Gradio interface for easy interaction
+- **State-of-the-art Models**: Multiple vision-language model families
+  - Qwen 2.5 VL: 3B, 7B, 32B, 72B
+  - InternVL 3.5: 1B, 2B, 4B, 8B, 14B, 30B, 38B, 241B
+- **Web UI**: User-friendly Gradio interface with batch processing
 - **REST API**: FastAPI backend for programmatic access
 - **CLI**: Command-line interface for automation
-- **Markdown Output**: Preserves document structure and formatting
+- **Batch Processing**: Process multiple PDFs with progress tracking and ZIP download
+- **Markdown Output**: Clean formatting without code fences
 - **Custom Prompts**: Flexible prompt engineering for specific tasks
 - **Multi-GPU Support**: Automatic device distribution for large models
-- **Batch Processing**: Process multiple files efficiently
+- **Cloud Ready**: Deploy on Kaggle, Colab, or HuggingFace Spaces
 - **HuggingFace Integration**: Automatic model downloading and caching
 
 ## Quick Start
@@ -40,6 +43,9 @@ python main.py api       # Just the API
 
 # Or use CLI for direct processing
 python main.py process document.pdf --model "Qwen2.5-VL-7B-Instruct" --output result.md
+
+# List all available models
+python main.py list-models
 ```
 
 ## Installation
@@ -279,7 +285,8 @@ pdf-ocr-llm/
     │   └── config_manager.py    # Configuration management
     ├── models/
     │   ├── base_model.py        # Abstract base class
-    │   ├── qwen2vl_model.py     # Qwen 2.5 VL implementation
+    │   ├── qwen25vl_model.py    # Qwen 2.5 VL implementation
+    │   ├── internvl_model.py    # InternVL 3.5 implementation
     │   └── model_factory.py     # Model factory pattern
     ├── processors/
     │   └── pdf_processor.py     # PDF processing utilities
@@ -311,12 +318,35 @@ The project follows a professional, modular architecture:
 
 ## Models
 
-### Qwen 2.5 VL
+The project supports multiple vision-language model families optimized for OCR and document understanding:
 
-A state-of-the-art vision-language model from Alibaba Cloud. Available in three sizes:
-- **2B parameters**: Faster processing, lower memory requirements (~4GB GPU)
-- **7B parameters**: Balanced performance and quality (~14GB GPU)
-- **72B parameters**: Highest quality output, requires significant resources (80GB+ GPU or multi-GPU)
+### Qwen 2.5 VL (Alibaba Cloud)
+
+State-of-the-art vision-language models with excellent OCR capabilities:
+
+- **Qwen2.5-VL-3B-Instruct** - 3B parameters, efficient and fast
+- **Qwen2.5-VL-7B-Instruct** - 7B parameters, balanced performance
+- **Qwen2.5-VL-32B-Instruct** - 32B parameters, high quality
+- **Qwen2.5-VL-72B-Instruct** - 72B parameters, best quality
+
+### InternVL 3.5 (OpenGVLab)
+
+Versatile multimodal models with strong document understanding:
+
+- **InternVL3.5-1B-Instruct** - 1B parameters, ultra-lightweight
+- **InternVL3.5-2B-Instruct** - 2B parameters, very efficient
+- **InternVL3.5-4B-Instruct** - 4B parameters, balanced small model
+- **InternVL3.5-8B-Instruct** - 8B parameters, strong mid-size
+- **InternVL3.5-14B-Instruct** - 14B parameters, high performance
+- **InternVL3.5-30B-A3B-Instruct** - 30B parameters, very powerful
+- **InternVL3.5-38B-Instruct** - 38B parameters, flagship model
+- **InternVL3.5-241B-A28B-Instruct** - 241B parameters, ultimate quality
+
+**Model Selection Tips:**
+- **For speed**: Use 1B-4B models
+- **For quality**: Use 7B-14B models  
+- **For best results**: Use 32B+ models
+- **For huge documents**: Use models with longer context (Qwen 2.5 VL recommended)
 
 ## Multi-GPU Support
 
@@ -377,15 +407,6 @@ docker-compose up
 Access at:
 - UI: `http://localhost:7860`
 - API: `http://localhost:8000`
-
-### HuggingFace Spaces
-
-Deploy as a permanent Gradio Space:
-
-1. Create a new Space on HuggingFace
-2. Push this repository
-3. Set `app_file: main.py` in your Space settings
-4. Add build command: `python main.py ui`
 
 ### Production Server
 
