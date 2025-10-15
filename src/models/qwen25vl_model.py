@@ -17,6 +17,15 @@ logger = logging.getLogger(__name__)
 class Qwen25VLModel(BaseOCRModel):
     """Qwen 2.5 VL model handler for OCR tasks."""
     
+    @staticmethod
+    def _clean_code_fences(text: str) -> str:
+        """Remove markdown code fences from output."""
+        import re
+        # Remove ```markdown ... ``` or ``` ... ``` blocks
+        text = re.sub(r'^```(?:markdown)?\s*\n', '', text, flags=re.MULTILINE)
+        text = re.sub(r'\n```\s*$', '', text, flags=re.MULTILINE)
+        return text.strip()
+    
     def __init__(self, model_config: Dict[str, Any], device_manager, inference_config: Dict[str, Any]):
         """
         Initialize the Qwen 2.5 VL model.
@@ -87,7 +96,7 @@ class Qwen25VLModel(BaseOCRModel):
         
         # Default OCR prompt if none provided
         if prompt is None:
-            prompt = "Extract all text from this image in Markdown format. Preserve the layout, formatting, tables, and structure. Use proper Markdown syntax for headings, lists, tables, bold, italic, etc."
+            prompt = "Extract all text from this image. Preserve the layout, formatting, tables, and structure. Use Markdown syntax for headings, lists, tables, bold, italic, etc. Output only the formatted text without code blocks or fences."
         
         # Prepare messages for the model
         messages = [
@@ -140,6 +149,9 @@ class Qwen25VLModel(BaseOCRModel):
             clean_up_tokenization_spaces=False
         )[0]
         
+        # Clean up markdown code fences if present
+        output_text = self._clean_code_fences(output_text)
+        
         return output_text
     
     def process_batch(self, images: List[Image.Image], prompts: List[str] = None) -> List[str]:
@@ -158,7 +170,7 @@ class Qwen25VLModel(BaseOCRModel):
         
         # Default prompts if none provided
         if prompts is None:
-            prompts = ["Extract all text from this image in Markdown format. Preserve the layout, formatting, tables, and structure. Use proper Markdown syntax for headings, lists, tables, bold, italic, etc."] * len(images)
+            prompts = ["Extract all text from this image. Preserve the layout, formatting, tables, and structure. Use Markdown syntax for headings, lists, tables, bold, italic, etc. Output only the formatted text without code blocks or fences."] * len(images)
         
         if len(prompts) != len(images):
             raise ValueError("Number of prompts must match number of images")
@@ -228,6 +240,9 @@ class Qwen25VLModel(BaseOCRModel):
                 skip_special_tokens=True,
                 clean_up_tokenization_spaces=False
             )
+            
+            # Clean up code fences
+            batch_outputs = [self._clean_code_fences(text) for text in batch_outputs]
             
             results.extend(batch_outputs)
         
