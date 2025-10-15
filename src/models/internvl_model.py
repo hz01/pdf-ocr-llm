@@ -97,55 +97,80 @@ class InternVLModel(BaseOCRModel):
         if prompt is None:
             prompt = "Extract all text from this image. Preserve the layout, formatting, tables, and structure. Use Markdown syntax for headings, lists, tables, bold, italic, etc. Output only the formatted text without code blocks or fences."
         
-        # Use InternVL's chat interface
+        # Use InternVL's chat interface with correct parameters
         generation_config = dict(
             max_new_tokens=self.inference_config.get('max_new_tokens', 2048),
             do_sample=True if self.inference_config.get('temperature', 0.1) > 0 else False,
-            temperature=self.inference_config.get('temperature', 0.1),
-            top_p=self.inference_config.get('top_p', 0.9),
         )
         
-        # InternVL models typically have a chat method
+        if generation_config['do_sample']:
+            generation_config['temperature'] = self.inference_config.get('temperature', 0.1)
+            generation_config['top_p'] = self.inference_config.get('top_p', 0.9)
+        
+        # InternVL models have a chat method
         try:
-            output_text = self.model.chat(
-                self.tokenizer,
+            # Correct chat signature for InternVL
+            logger.info(f"Calling InternVL chat with prompt length: {len(prompt)}")
+            response = self.model.chat(
+                tokenizer=self.tokenizer,
                 pixel_values=None,
                 question=prompt,
                 generation_config=generation_config,
                 history=None,
                 return_history=False,
-                IMG_CONTEXT_TOKEN='<IMG_CONTEXT>',
-                IMG_START_TOKEN='<img>',
-                IMG_END_TOKEN='</img>',
-                verbose=False,
                 image=image
             )
-        except AttributeError:
-            # Fallback to standard generation if chat method not available
-            logger.warning("Model doesn't have chat method, using standard generation")
-            pixel_values = self.model.extract_feature(image)
-            question = f"<image>\n{prompt}"
             
-            input_ids = self.tokenizer(question, return_tensors='pt').input_ids
-            device = next(self.model.parameters()).device
-            input_ids = input_ids.to(device)
+            # Handle both string and tuple responses
+            output_text = response[0] if isinstance(response, tuple) else response
+            logger.info(f"InternVL response length: {len(output_text) if output_text else 0}")
             
-            with torch.no_grad():
-                generated_ids = self.model.generate(
-                    input_ids=input_ids,
-                    pixel_values=pixel_values.to(device) if pixel_values is not None else None,
-                    **generation_config
-                )
+        except Exception as e:
+            logger.error(f"Error during InternVL chat: {e}")
+            logger.info("Attempting alternative inference method...")
             
-            output_text = self.tokenizer.decode(
-                generated_ids[0],
-                skip_special_tokens=True,
-                clean_up_tokenization_spaces=False
-            )
-            
-            # Remove the prompt from output if present
-            if prompt in output_text:
-                output_text = output_text.replace(prompt, "").strip()
+            # Alternative approach: prepare messages and use pipeline-like method
+            try:
+                # Format as conversation
+                question = f"<image>\n{prompt}"
+                
+                # Get model inputs
+                inputs = self.tokenizer(question, return_tensors='pt')
+                device = next(self.model.parameters()).device
+                
+                # Move to device
+                input_ids = inputs['input_ids'].to(device)
+                attention_mask = inputs.get('attention_mask', None)
+                if attention_mask is not None:
+                    attention_mask = attention_mask.to(device)
+                
+                # Process image if model has image processing
+                if hasattr(self.model, 'encode_images'):
+                    image_tensor = self.model.encode_images(image).to(device)
+                else:
+                    image_tensor = None
+                
+                # Generate
+                with torch.no_grad():
+                    outputs = self.model.generate(
+                        input_ids=input_ids,
+                        attention_mask=attention_mask,
+                        images=image_tensor,
+                        **generation_config
+                    )
+                
+                # Decode
+                output_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+                
+                # Remove prompt from output
+                if question in output_text:
+                    output_text = output_text.replace(question, "").strip()
+                if prompt in output_text:
+                    output_text = output_text.replace(prompt, "").strip()
+                    
+            except Exception as e2:
+                logger.error(f"Alternative method also failed: {e2}")
+                raise RuntimeError(f"Could not process image with InternVL model: {e}, {e2}")
         
         # Clean up markdown code fences if present
         output_text = self._clean_code_fences(output_text)
