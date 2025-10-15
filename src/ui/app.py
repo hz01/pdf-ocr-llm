@@ -142,13 +142,14 @@ def download_markdown(markdown_text):
         return f.name
 
 
-def process_batch_pdfs(pdf_files, model_name):
+def process_batch_pdfs(pdf_files, model_name, progress=gr.Progress()):
     """
     Process multiple PDF files and create a zip with results.
     
     Args:
         pdf_files: List of uploaded PDF files
         model_name: Selected model name
+        progress: Gradio progress tracker
     
     Returns:
         Tuple of (zip_file_path, status_message)
@@ -163,11 +164,15 @@ def process_batch_pdfs(pdf_files, model_name):
         # Create temp directory for outputs
         output_dir = tempfile.mkdtemp()
         results = []
+        total_files = len(pdf_files)
         
-        logger.info(f"Processing {len(pdf_files)} PDFs with model: {model_name}")
+        logger.info(f"Processing {total_files} PDFs with model: {model_name}")
         
         # Process each PDF
         for idx, pdf_file in enumerate(pdf_files, 1):
+            # Update progress
+            progress(idx / total_files, desc=f"Processing {idx}/{total_files}: {Path(pdf_file.name).name}")
+            
             try:
                 # Get original filename without extension
                 pdf_name = Path(pdf_file.name).stem
@@ -195,6 +200,7 @@ def process_batch_pdfs(pdf_files, model_name):
                 })
         
         # Create zip file
+        progress(0.95, desc="Creating ZIP file...")
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         zip_path = os.path.join(output_dir, f"ocr_results_{timestamp}.zip")
         
@@ -203,14 +209,16 @@ def process_batch_pdfs(pdf_files, model_name):
                 zipf.write(md_file, md_file.name)
         
         # Prepare status message
+        progress(1.0, desc="Complete!")
         success_count = sum(1 for r in results if r['status'] == 'Success')
         total_pages = sum(r['pages'] for r in results)
         
-        status = f"Processed {success_count}/{len(pdf_files)} PDFs successfully\n"
-        status += f"Total pages: {total_pages}\n\n"
-        status += "Files:\n"
+        status = f"✓ Processed {success_count}/{total_files} PDFs successfully\n"
+        status += f"✓ Total pages: {total_pages}\n\n"
+        status += "Results:\n"
         for r in results:
-            status += f"- {r['file']}: {r['status']}"
+            icon = "✓" if r['status'] == 'Success' else "✗"
+            status += f"{icon} {r['file']}: {r['status']}"
             if r['pages'] > 0:
                 status += f" ({r['pages']} pages)"
             status += "\n"
@@ -219,7 +227,7 @@ def process_batch_pdfs(pdf_files, model_name):
         
     except Exception as e:
         logger.error(f"Error in batch processing: {e}")
-        return None, f"Batch processing failed: {str(e)}"
+        return None, f"✗ Batch processing failed: {str(e)}"
 
 
 # Create Gradio interface with custom theme
