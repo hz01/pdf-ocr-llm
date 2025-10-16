@@ -3,6 +3,7 @@ import logging
 
 from .base_model import BaseOCRModel
 from .qwen25vl_model import Qwen25VLModel
+from .qwen3vl_model import Qwen3VLModel
 from .internvl_model import InternVLModel
 
 logger = logging.getLogger(__name__)
@@ -13,6 +14,7 @@ class ModelFactory:
     
     MODEL_TYPES = {
         'qwen25vl': Qwen25VLModel,
+        'qwen3vl': Qwen3VLModel,
         'internvl': InternVLModel
     }
     

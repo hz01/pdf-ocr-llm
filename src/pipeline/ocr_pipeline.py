@@ -54,12 +54,13 @@ class OCRPipeline:
         """
         return self.config_manager.get_all_models()
     
-    def load_model(self, model_name: str) -> None:
+    def load_model(self, model_name: str, custom_inference_config: Dict[str, Any] = None) -> None:
         """
         Load a specific model by name.
         
         Args:
             model_name: Name of the model to load
+            custom_inference_config: Optional custom inference configuration to override defaults
         """
         # Check if model is already loaded
         if self.current_model_name == model_name and self.current_model is not None:
@@ -78,12 +79,15 @@ class OCRPipeline:
         if model_config is None:
             raise ValueError(f"Model not found: {model_name}")
         
+        # Use custom inference config or default
+        inference_config = custom_inference_config if custom_inference_config else self.inference_config
+        
         # Create and load model
         logger.info(f"Loading model: {model_name}")
         self.current_model = ModelFactory.create_model(
             model_config,
             self.device_manager,
-            self.inference_config
+            inference_config
         )
         self.current_model.load_model()
         self.current_model_name = model_name
@@ -97,7 +101,10 @@ class OCRPipeline:
         output_path: Union[str, Path] = None,
         save_images: bool = False,
         images_dir: Union[str, Path] = None,
-        prompt: str = None
+        prompt: str = None,
+        temperature: float = None,
+        top_p: float = None,
+        max_new_tokens: int = None
     ) -> Dict[str, Any]:
         """
         Process a PDF file and extract text using OCR.
@@ -109,15 +116,29 @@ class OCRPipeline:
             save_images: Whether to save intermediate images
             images_dir: Directory to save images (if save_images is True)
             prompt: Optional prompt for the model
+            temperature: Sampling temperature (None = use default)
+            top_p: Top-p sampling parameter (None = use default)
+            max_new_tokens: Maximum tokens to generate (None = use default)
             
         Returns:
             Dictionary containing extracted text and metadata
         """
         pdf_path = Path(pdf_path)
         
+        # Build custom inference config if parameters are provided
+        custom_inference_config = None
+        if any(param is not None for param in [temperature, top_p, max_new_tokens]):
+            custom_inference_config = self.inference_config.copy()
+            if temperature is not None:
+                custom_inference_config['temperature'] = temperature
+            if top_p is not None:
+                custom_inference_config['top_p'] = top_p
+            if max_new_tokens is not None:
+                custom_inference_config['max_new_tokens'] = max_new_tokens
+        
         # Load model if specified
         if model_name is not None:
-            self.load_model(model_name)
+            self.load_model(model_name, custom_inference_config)
         
         # Check if model is loaded
         if self.current_model is None:
@@ -180,7 +201,10 @@ class OCRPipeline:
         image_path: Union[str, Path],
         model_name: str = None,
         output_path: Union[str, Path] = None,
-        prompt: str = None
+        prompt: str = None,
+        temperature: float = None,
+        top_p: float = None,
+        max_new_tokens: int = None
     ) -> Dict[str, Any]:
         """
         Process a single image and extract text using OCR.
@@ -190,15 +214,29 @@ class OCRPipeline:
             model_name: Name of the model to use (if not already loaded)
             output_path: Optional path to save the extracted text
             prompt: Optional prompt for the model
+            temperature: Sampling temperature (None = use default)
+            top_p: Top-p sampling parameter (None = use default)
+            max_new_tokens: Maximum tokens to generate (None = use default)
             
         Returns:
             Dictionary containing extracted text and metadata
         """
         image_path = Path(image_path)
         
+        # Build custom inference config if parameters are provided
+        custom_inference_config = None
+        if any(param is not None for param in [temperature, top_p, max_new_tokens]):
+            custom_inference_config = self.inference_config.copy()
+            if temperature is not None:
+                custom_inference_config['temperature'] = temperature
+            if top_p is not None:
+                custom_inference_config['top_p'] = top_p
+            if max_new_tokens is not None:
+                custom_inference_config['max_new_tokens'] = max_new_tokens
+        
         # Load model if specified
         if model_name is not None:
-            self.load_model(model_name)
+            self.load_model(model_name, custom_inference_config)
         
         # Check if model is loaded
         if self.current_model is None:

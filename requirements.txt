@@ -16,6 +16,10 @@ uvicorn>=0.24.0
 gradio>=4.0.0
 python-multipart>=0.0.6
 
+# Optional: Flash Attention 2 for faster inference (requires CUDA)
+# Uncomment and install separately if you have CUDA:
+# flash-attn>=2.3.0
+
 # System dependencies (install separately):
 # - poppler-utils (for pdf2image)
 

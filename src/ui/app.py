@@ -29,7 +29,7 @@ pipeline = OCRPipeline("config.yaml")
 available_models = [model['name'] for model in pipeline.list_available_models()]
 
 
-def process_pdf(pdf_file, model_name, custom_prompt, dpi):
+def process_pdf(pdf_file, model_name, custom_prompt, temperature, top_p, max_tokens):
     """
     Process a PDF file and extract text.
     
@@ -37,7 +37,9 @@ def process_pdf(pdf_file, model_name, custom_prompt, dpi):
         pdf_file: Uploaded PDF file path
         model_name: Selected model name
         custom_prompt: Custom prompt (optional)
-        dpi: DPI for conversion
+        temperature: Sampling temperature
+        top_p: Top-p sampling
+        max_tokens: Maximum output tokens
     
     Returns:
         Extracted markdown text
@@ -61,7 +63,10 @@ def process_pdf(pdf_file, model_name, custom_prompt, dpi):
             pdf_path=pdf_file,
             model_name=model_name,
             output_path=temp_output_path,
-            prompt=prompt
+            prompt=prompt,
+            temperature=temperature,
+            top_p=top_p,
+            max_new_tokens=int(max_tokens)
         )
         
         # Read the output
@@ -81,7 +86,7 @@ def process_pdf(pdf_file, model_name, custom_prompt, dpi):
         return f"Error: {str(e)}", f"Processing failed: {str(e)}"
 
 
-def process_image(image_file, model_name, custom_prompt):
+def process_image(image_file, model_name, custom_prompt, temperature, top_p, max_tokens):
     """
     Process an image file and extract text.
     
@@ -89,6 +94,9 @@ def process_image(image_file, model_name, custom_prompt):
         image_file: Uploaded image file path
         model_name: Selected model name
         custom_prompt: Custom prompt (optional)
+        temperature: Sampling temperature
+        top_p: Top-p sampling
+        max_tokens: Maximum output tokens
     
     Returns:
         Extracted markdown text
@@ -112,7 +120,10 @@ def process_image(image_file, model_name, custom_prompt):
             image_path=image_file,
             model_name=model_name,
             output_path=temp_output_path,
-            prompt=prompt
+            prompt=prompt,
+            temperature=temperature,
+            top_p=top_p,
+            max_new_tokens=int(max_tokens)
         )
         
         # Read the output
@@ -142,13 +153,16 @@ def download_markdown(markdown_text):
         return f.name
 
 
-def process_batch_pdfs(pdf_files, model_name, progress=gr.Progress()):
+def process_batch_pdfs(pdf_files, model_name, temperature, top_p, max_tokens, progress=gr.Progress()):
     """
     Process multiple PDF files and create a zip with results.
     
     Args:
         pdf_files: List of uploaded PDF files
         model_name: Selected model name
+        temperature: Sampling temperature
+        top_p: Top-p sampling
+        max_tokens: Maximum output tokens
         progress: Gradio progress tracker
     
     Returns:
@@ -182,7 +196,10 @@ def process_batch_pdfs(pdf_files, model_name, progress=gr.Progress()):
                 result = pipeline.process_pdf(
                     pdf_path=pdf_file.name,
                     model_name=model_name,
-                    output_path=output_path
+                    output_path=output_path,
+                    temperature=temperature,
+                    top_p=top_p,
+                    max_new_tokens=int(max_tokens)
                 )
                 
                 results.append({
@@ -266,6 +283,34 @@ with gr.Blocks(title="PDF OCR with Vision Language Models", theme=custom_theme) 
                         placeholder="Leave empty for default OCR prompt...",
                         lines=3
                     )
+                    
+                    # Generation Parameters
+                    gr.Markdown("### Generation Parameters")
+                    pdf_temperature = gr.Slider(
+                        minimum=0.0,
+                        maximum=1.0,
+                        value=0.1,
+                        step=0.1,
+                        label="Temperature",
+                        info="Controls randomness (0=deterministic, 1=creative)"
+                    )
+                    pdf_top_p = gr.Slider(
+                        minimum=0.0,
+                        maximum=1.0,
+                        value=0.9,
+                        step=0.05,
+                        label="Top P",
+                        info="Nucleus sampling threshold"
+                    )
+                    pdf_max_tokens = gr.Slider(
+                        minimum=128,
+                        maximum=4096,
+                        value=2048,
+                        step=128,
+                        label="Max Output Tokens",
+                        info="Maximum length of generated text"
+                    )
+                    
                     pdf_button = gr.Button("Process PDF", variant="primary")
                 
                 with gr.Column():
@@ -278,8 +323,8 @@ with gr.Blocks(title="PDF OCR with Vision Language Models", theme=custom_theme) 
                     pdf_download = gr.File(label="Download Result")
             
             pdf_button.click(
-                fn=lambda file, model, prompt: process_pdf(file, model, prompt, 300),
-                inputs=[pdf_input, pdf_model, pdf_prompt],
+                fn=process_pdf,
+                inputs=[pdf_input, pdf_model, pdf_prompt, pdf_temperature, pdf_top_p, pdf_max_tokens],
                 outputs=[pdf_output, pdf_status]
             )
             
@@ -305,6 +350,34 @@ with gr.Blocks(title="PDF OCR with Vision Language Models", theme=custom_theme) 
                         value=available_models[0] if available_models else None,
                         info="Choose the vision-language model to use"
                     )
+                    
+                    # Generation Parameters
+                    gr.Markdown("### Generation Parameters")
+                    batch_temperature = gr.Slider(
+                        minimum=0.0,
+                        maximum=1.0,
+                        value=0.1,
+                        step=0.1,
+                        label="Temperature",
+                        info="Controls randomness (0=deterministic, 1=creative)"
+                    )
+                    batch_top_p = gr.Slider(
+                        minimum=0.0,
+                        maximum=1.0,
+                        value=0.9,
+                        step=0.05,
+                        label="Top P",
+                        info="Nucleus sampling threshold"
+                    )
+                    batch_max_tokens = gr.Slider(
+                        minimum=128,
+                        maximum=4096,
+                        value=2048,
+                        step=128,
+                        label="Max Output Tokens",
+                        info="Maximum length of generated text"
+                    )
+                    
                     batch_button = gr.Button("Process All PDFs", variant="primary")
                 
                 with gr.Column():
@@ -317,7 +390,7 @@ with gr.Blocks(title="PDF OCR with Vision Language Models", theme=custom_theme) 
             
             batch_button.click(
                 fn=process_batch_pdfs,
-                inputs=[batch_input, batch_model],
+                inputs=[batch_input, batch_model, batch_temperature, batch_top_p, batch_max_tokens],
                 outputs=[batch_download, batch_status]
             )
         
@@ -340,6 +413,34 @@ with gr.Blocks(title="PDF OCR with Vision Language Models", theme=custom_theme) 
                         placeholder="Leave empty for default OCR prompt...",
                         lines=3
                     )
+                    
+                    # Generation Parameters
+                    gr.Markdown("### Generation Parameters")
+                    image_temperature = gr.Slider(
+                        minimum=0.0,
+                        maximum=1.0,
+                        value=0.1,
+                        step=0.1,
+                        label="Temperature",
+                        info="Controls randomness (0=deterministic, 1=creative)"
+                    )
+                    image_top_p = gr.Slider(
+                        minimum=0.0,
+                        maximum=1.0,
+                        value=0.9,
+                        step=0.05,
+                        label="Top P",
+                        info="Nucleus sampling threshold"
+                    )
+                    image_max_tokens = gr.Slider(
+                        minimum=128,
+                        maximum=4096,
+                        value=2048,
+                        step=128,
+                        label="Max Output Tokens",
+                        info="Maximum length of generated text"
+                    )
+                    
                     image_button = gr.Button("Process Image", variant="primary")
                 
                 with gr.Column():
@@ -353,7 +454,7 @@ with gr.Blocks(title="PDF OCR with Vision Language Models", theme=custom_theme) 
             
             image_button.click(
                 fn=process_image,
-                inputs=[image_input, image_model, image_prompt],
+                inputs=[image_input, image_model, image_prompt, image_temperature, image_top_p, image_max_tokens],
                 outputs=[image_output, image_status]
             )
             

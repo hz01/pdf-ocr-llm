@@ -5,6 +5,7 @@ A professional PDF OCR system that leverages state-of-the-art vision-language mo
 ## Features
 
 - **State-of-the-art Models**: Multiple vision-language model families
+  - Qwen 3 VL: 4B, 8B, 30B, 235B (Latest)
   - Qwen 2.5 VL: 3B, 7B, 32B, 72B
   - InternVL 3.5: 1B, 2B, 4B, 8B, 14B, 30B, 38B, 241B
 - **Web UI**: User-friendly Gradio interface with batch processing
@@ -320,9 +321,20 @@ The project follows a professional, modular architecture:
 
 The project supports multiple vision-language model families optimized for OCR and document understanding:
 
+### Qwen 3 VL (Alibaba Cloud) - Latest
+
+Next-generation vision-language models with cutting-edge OCR performance:
+
+- **Qwen3-VL-4B-Instruct** - 4B parameters, highly efficient
+- **Qwen3-VL-8B-Instruct** - 8B parameters, excellent balance
+- **Qwen3-VL-30B-A3B-Instruct** - 30B parameters, very powerful
+- **Qwen3-VL-235B-A22B-Instruct** - 235B parameters, state-of-the-art
+
+> 📚 **Reference**: [Qwen 3 VL Collection on HuggingFace](https://huggingface.co/collections/Qwen/qwen3-vl-68d2a7c1b8a8afce4ebd2dbe)
+
 ### Qwen 2.5 VL (Alibaba Cloud)
 
-State-of-the-art vision-language models with excellent OCR capabilities:
+Previous generation with proven reliability:
 
 - **Qwen2.5-VL-3B-Instruct** - 3B parameters, efficient and fast
 - **Qwen2.5-VL-7B-Instruct** - 7B parameters, balanced performance
@@ -331,7 +343,7 @@ State-of-the-art vision-language models with excellent OCR capabilities:
 
 ### InternVL 3.5 (OpenGVLab)
 
-Versatile multimodal models with strong document understanding:
+Versatile multimodal models with dynamic image preprocessing and tiling:
 
 - **InternVL3.5-1B-Instruct** - 1B parameters, ultra-lightweight
 - **InternVL3.5-2B-Instruct** - 2B parameters, very efficient
@@ -342,11 +354,14 @@ Versatile multimodal models with strong document understanding:
 - **InternVL3.5-38B-Instruct** - 38B parameters, flagship model
 - **InternVL3.5-241B-A28B-Instruct** - 241B parameters, ultimate quality
 
+> **Note**: InternVL models use dynamic image tiling for better quality on high-resolution documents.
+
 **Model Selection Tips:**
-- **For speed**: Use 1B-4B models
-- **For quality**: Use 7B-14B models  
-- **For best results**: Use 32B+ models
-- **For huge documents**: Use models with longer context (Qwen 2.5 VL recommended)
+- **For speed**: Use 1B-4B models (InternVL3.5-1B, Qwen3-VL-4B)
+- **For quality**: Use 7B-14B models (Qwen3-VL-8B, InternVL3.5-8B)
+- **For best results**: Use 30B+ models (Qwen3-VL-30B, Qwen3-VL-235B)
+- **For high-resolution documents**: InternVL models (dynamic tiling)
+- **For general OCR (recommended)**: Qwen 3 VL models (latest, best performance)
 
 ## Multi-GPU Support
 
