@@ -12,6 +12,9 @@ from pathlib import Path
 import logging
 import zipfile
 from datetime import datetime
+import torch
+import transformers
+import sys
 
 from src.pipeline.ocr_pipeline import OCRPipeline
 
@@ -27,6 +30,61 @@ pipeline = OCRPipeline("config.yaml")
 
 # Get available models
 available_models = [model['name'] for model in pipeline.list_available_models()]
+
+# Gather system information
+def get_system_info():
+    """Collect system and library information."""
+    info = {}
+    
+    # Python version
+    info['python_version'] = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+    
+    # CUDA availability
+    info['cuda_available'] = torch.cuda.is_available()
+    
+    # GPU information
+    if info['cuda_available']:
+        info['cuda_version'] = torch.version.cuda
+        info['gpu_count'] = torch.cuda.device_count()
+        info['gpus'] = []
+        for i in range(info['gpu_count']):
+            gpu_name = torch.cuda.get_device_name(i)
+            gpu_memory = torch.cuda.get_device_properties(i).total_memory / (1024**3)  # GB
+            info['gpus'].append({
+                'id': i,
+                'name': gpu_name,
+                'memory': f"{gpu_memory:.1f} GB"
+            })
+    else:
+        info['cuda_version'] = "N/A"
+        info['gpu_count'] = 0
+        info['gpus'] = []
+    
+    # Library versions
+    info['pytorch_version'] = torch.__version__
+    info['transformers_version'] = transformers.__version__
+    
+    try:
+        import gradio
+        info['gradio_version'] = gradio.__version__
+    except:
+        info['gradio_version'] = "Unknown"
+    
+    try:
+        import accelerate
+        info['accelerate_version'] = accelerate.__version__
+    except:
+        info['accelerate_version'] = "Not installed"
+    
+    try:
+        import PIL
+        info['pillow_version'] = PIL.__version__
+    except:
+        info['pillow_version'] = "Unknown"
+    
+    return info
+
+system_info = get_system_info()
 
 
 def process_pdf(pdf_file, model_name, custom_prompt, temperature, top_p, max_tokens):
@@ -284,32 +342,32 @@ with gr.Blocks(title="PDF OCR with Vision Language Models", theme=custom_theme) 
                         lines=3
                     )
                     
-                    # Generation Parameters
-                    gr.Markdown("### Generation Parameters")
-                    pdf_temperature = gr.Slider(
-                        minimum=0.0,
-                        maximum=1.0,
-                        value=0.1,
-                        step=0.1,
-                        label="Temperature",
-                        info="Controls randomness (0=deterministic, 1=creative)"
-                    )
-                    pdf_top_p = gr.Slider(
-                        minimum=0.0,
-                        maximum=1.0,
-                        value=0.9,
-                        step=0.05,
-                        label="Top P",
-                        info="Nucleus sampling threshold"
-                    )
-                    pdf_max_tokens = gr.Slider(
-                        minimum=128,
-                        maximum=4096,
-                        value=2048,
-                        step=128,
-                        label="Max Output Tokens",
-                        info="Maximum length of generated text"
-                    )
+                    # Generation Parameters (Collapsible)
+                    with gr.Accordion("Generation Parameters", open=False):
+                        pdf_temperature = gr.Slider(
+                            minimum=0.0,
+                            maximum=1.0,
+                            value=0.1,
+                            step=0.1,
+                            label="Temperature",
+                            info="Controls randomness (0=deterministic, 1=creative)"
+                        )
+                        pdf_top_p = gr.Slider(
+                            minimum=0.0,
+                            maximum=1.0,
+                            value=0.9,
+                            step=0.05,
+                            label="Top P",
+                            info="Nucleus sampling threshold"
+                        )
+                        pdf_max_tokens = gr.Slider(
+                            minimum=128,
+                            maximum=4096,
+                            value=2048,
+                            step=128,
+                            label="Max Output Tokens",
+                            info="Maximum length of generated text"
+                        )
                     
                     pdf_button = gr.Button("Process PDF", variant="primary")
                 
@@ -351,32 +409,32 @@ with gr.Blocks(title="PDF OCR with Vision Language Models", theme=custom_theme) 
                         info="Choose the vision-language model to use"
                     )
                     
-                    # Generation Parameters
-                    gr.Markdown("### Generation Parameters")
-                    batch_temperature = gr.Slider(
-                        minimum=0.0,
-                        maximum=1.0,
-                        value=0.1,
-                        step=0.1,
-                        label="Temperature",
-                        info="Controls randomness (0=deterministic, 1=creative)"
-                    )
-                    batch_top_p = gr.Slider(
-                        minimum=0.0,
-                        maximum=1.0,
-                        value=0.9,
-                        step=0.05,
-                        label="Top P",
-                        info="Nucleus sampling threshold"
-                    )
-                    batch_max_tokens = gr.Slider(
-                        minimum=128,
-                        maximum=4096,
-                        value=2048,
-                        step=128,
-                        label="Max Output Tokens",
-                        info="Maximum length of generated text"
-                    )
+                    # Generation Parameters (Collapsible)
+                    with gr.Accordion("Generation Parameters", open=False):
+                        batch_temperature = gr.Slider(
+                            minimum=0.0,
+                            maximum=1.0,
+                            value=0.1,
+                            step=0.1,
+                            label="Temperature",
+                            info="Controls randomness (0=deterministic, 1=creative)"
+                        )
+                        batch_top_p = gr.Slider(
+                            minimum=0.0,
+                            maximum=1.0,
+                            value=0.9,
+                            step=0.05,
+                            label="Top P",
+                            info="Nucleus sampling threshold"
+                        )
+                        batch_max_tokens = gr.Slider(
+                            minimum=128,
+                            maximum=4096,
+                            value=2048,
+                            step=128,
+                            label="Max Output Tokens",
+                            info="Maximum length of generated text"
+                        )
                     
                     batch_button = gr.Button("Process All PDFs", variant="primary")
                 
@@ -414,32 +472,32 @@ with gr.Blocks(title="PDF OCR with Vision Language Models", theme=custom_theme) 
                         lines=3
                     )
                     
-                    # Generation Parameters
-                    gr.Markdown("### Generation Parameters")
-                    image_temperature = gr.Slider(
-                        minimum=0.0,
-                        maximum=1.0,
-                        value=0.1,
-                        step=0.1,
-                        label="Temperature",
-                        info="Controls randomness (0=deterministic, 1=creative)"
-                    )
-                    image_top_p = gr.Slider(
-                        minimum=0.0,
-                        maximum=1.0,
-                        value=0.9,
-                        step=0.05,
-                        label="Top P",
-                        info="Nucleus sampling threshold"
-                    )
-                    image_max_tokens = gr.Slider(
-                        minimum=128,
-                        maximum=4096,
-                        value=2048,
-                        step=128,
-                        label="Max Output Tokens",
-                        info="Maximum length of generated text"
-                    )
+                    # Generation Parameters (Collapsible)
+                    with gr.Accordion("Generation Parameters", open=False):
+                        image_temperature = gr.Slider(
+                            minimum=0.0,
+                            maximum=1.0,
+                            value=0.1,
+                            step=0.1,
+                            label="Temperature",
+                            info="Controls randomness (0=deterministic, 1=creative)"
+                        )
+                        image_top_p = gr.Slider(
+                            minimum=0.0,
+                            maximum=1.0,
+                            value=0.9,
+                            step=0.05,
+                            label="Top P",
+                            info="Nucleus sampling threshold"
+                        )
+                        image_max_tokens = gr.Slider(
+                            minimum=128,
+                            maximum=4096,
+                            value=2048,
+                            step=128,
+                            label="Max Output Tokens",
+                            info="Maximum length of generated text"
+                        )
                     
                     image_button = gr.Button("Process Image", variant="primary")
                 
@@ -496,6 +554,23 @@ with gr.Blocks(title="PDF OCR with Vision Language Models", theme=custom_theme) 
                 
                 ## System Information
                 
+                ### Hardware
+                - **CUDA Available**: {"✅ Yes" if system_info['cuda_available'] else "❌ No (CPU only)"}
+                - **CUDA Version**: {system_info['cuda_version']}
+                - **GPU Count**: {system_info['gpu_count']}
+                
+                {"### GPU Details" if system_info['gpu_count'] > 0 else ""}
+                {chr(10).join([f"- **GPU {gpu['id']}**: {gpu['name']} ({gpu['memory']})" for gpu in system_info['gpus']]) if system_info['gpus'] else ""}
+                
+                ### Software
+                - **Python**: {system_info['python_version']}
+                - **PyTorch**: {system_info['pytorch_version']}
+                - **Transformers**: {system_info['transformers_version']}
+                - **Gradio**: {system_info['gradio_version']}
+                - **Accelerate**: {system_info['accelerate_version']}
+                - **Pillow**: {system_info['pillow_version']}
+                
+                ### Configuration
                 - **Pipeline Status**: Ready
                 - **Available Models**: {len(available_models)}
                 - **Config File**: config.yaml
