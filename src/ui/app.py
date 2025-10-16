@@ -524,58 +524,64 @@ with gr.Blocks(title="PDF OCR with Vision Language Models", theme=custom_theme) 
         
         # Information Tab
         with gr.Tab("Information"):
-            gr.Markdown(
-                f"""
-                ## Available Models
-                
-                {chr(10).join([f"- **{model}**" for model in available_models])}
-                
-                ## Features
-                
-                - **PDF Processing**: Convert PDF pages to images and extract text
-                - **Batch PDF Processing**: Process multiple PDFs at once, download results as ZIP
-                - **Image Processing**: Extract text from images directly
-                - **Custom Prompts**: Provide specific instructions for extraction
-                - **Markdown Output**: Results in clean, formatted markdown
-                - **Download**: Save results as `.md` files or ZIP archives
-                
-                ## Tips
-                
-                - Larger models (32B, 72B) provide better accuracy but require more memory
-                - Smaller models (3B, 7B) are faster and use less memory
-                
-                ## Custom Prompts
-                
-                You can provide custom prompts for specific extraction tasks:
-                
-                - "Extract all text preserving tables and formatting"
-                - "Extract only the invoice number, date, and total amount"
-                - "Extract the document in JSON format with sections"
-                
-                ## System Information
-                
-                ### Hardware
-                - **CUDA Available**: {"✅ Yes" if system_info['cuda_available'] else "❌ No (CPU only)"}
-                - **CUDA Version**: {system_info['cuda_version']}
-                - **GPU Count**: {system_info['gpu_count']}
-                
-                {"### GPU Details" if system_info['gpu_count'] > 0 else ""}
-                {chr(10).join([f"- **GPU {gpu['id']}**: {gpu['name']} ({gpu['memory']})" for gpu in system_info['gpus']]) if system_info['gpus'] else ""}
-                
-                ### Software
-                - **Python**: {system_info['python_version']}
-                - **PyTorch**: {system_info['pytorch_version']}
-                - **Transformers**: {system_info['transformers_version']}
-                - **Gradio**: {system_info['gradio_version']}
-                - **Accelerate**: {system_info['accelerate_version']}
-                - **Pillow**: {system_info['pillow_version']}
-                
-                ### Configuration
-                - **Pipeline Status**: Ready
-                - **Available Models**: {len(available_models)}
-                - **Config File**: config.yaml
-                """
-            )
+            # Build system info markdown dynamically
+            gpu_details = ""
+            if system_info['gpu_count'] > 0:
+                gpu_details = "\n### GPU Details\n"
+                for gpu in system_info['gpus']:
+                    gpu_details += f"- **GPU {gpu['id']}**: {gpu['name']} ({gpu['memory']})\n"
+            
+            models_list = "\n".join([f"- **{model}**" for model in available_models])
+            
+            info_markdown = f"""
+## Available Models
+
+{models_list}
+
+## Features
+
+- **PDF Processing**: Convert PDF pages to images and extract text
+- **Batch PDF Processing**: Process multiple PDFs at once, download results as ZIP
+- **Image Processing**: Extract text from images directly
+- **Custom Prompts**: Provide specific instructions for extraction
+- **Markdown Output**: Results in clean, formatted markdown
+- **Download**: Save results as `.md` files or ZIP archives
+
+## Tips
+
+- Larger models (32B, 72B) provide better accuracy but require more memory
+- Smaller models (3B, 7B) are faster and use less memory
+
+## Custom Prompts
+
+You can provide custom prompts for specific extraction tasks:
+
+- "Extract all text preserving tables and formatting"
+- "Extract only the invoice number, date, and total amount"
+- "Extract the document in JSON format with sections"
+
+## System Information
+
+### Hardware
+- **CUDA Available**: {"✅ Yes" if system_info['cuda_available'] else "❌ No (CPU only)"}
+- **CUDA Version**: {system_info['cuda_version']}
+- **GPU Count**: {system_info['gpu_count']}
+{gpu_details}
+### Software
+- **Python**: {system_info['python_version']}
+- **PyTorch**: {system_info['pytorch_version']}
+- **Transformers**: {system_info['transformers_version']}
+- **Gradio**: {system_info['gradio_version']}
+- **Accelerate**: {system_info['accelerate_version']}
+- **Pillow**: {system_info['pillow_version']}
+
+### Configuration
+- **Pipeline Status**: Ready
+- **Available Models**: {len(available_models)}
+- **Config File**: config.yaml
+"""
+            
+            gr.Markdown(info_markdown)
     
     gr.Markdown(
         """
