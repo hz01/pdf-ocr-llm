@@ -238,6 +238,11 @@ class InternVLModel(BaseOCRModel):
         except Exception as e:
             logger.error(f"Error during InternVL chat: {e}")
             raise RuntimeError(f"InternVL failed to process image: {e}")
+        finally:
+            # Clean up GPU memory
+            del pixel_values
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
         
         # Clean up markdown code fences if present
         output_text = self._clean_code_fences(output_text)

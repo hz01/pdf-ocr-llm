@@ -158,6 +158,13 @@ class Qwen3VLModel(BaseOCRModel):
             clean_up_tokenization_spaces=False
         )[0]
         
+        # Clean up GPU memory
+        del inputs
+        del generated_ids
+        del generated_ids_trimmed
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        
         # Clean up markdown code fences if present
         output_text = self._clean_code_fences(output_text)
         
@@ -239,6 +246,13 @@ class Qwen3VLModel(BaseOCRModel):
                         skip_special_tokens=True,
                         clean_up_tokenization_spaces=False
                     )[0]
+                    
+                    # Clean up GPU memory
+                    del inputs
+                    del generated_ids
+                    del generated_ids_trimmed
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
                     
                     # Clean up code fences
                     output_text = self._clean_code_fences(output_text)
