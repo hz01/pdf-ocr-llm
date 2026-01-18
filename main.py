@@ -4,8 +4,12 @@ from pathlib import Path
 import sys
 import multiprocessing
 import time
+import os
 
 from src.pipeline.ocr_pipeline import OCRPipeline
+
+# Enable MPS fallback for Apple Silicon to fall back to CPU for unsupported operations
+os.environ.setdefault('PYTORCH_ENABLE_MPS_FALLBACK', '1')
 
 
 def setup_logging(log_level: str = "INFO") -> None:

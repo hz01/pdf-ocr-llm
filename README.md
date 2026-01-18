@@ -14,7 +14,8 @@ A professional PDF OCR system that leverages state-of-the-art vision-language mo
 - **Batch Processing**: Process multiple PDFs with progress tracking and ZIP download
 - **Markdown Output**: Clean formatting without code fences
 - **Custom Prompts**: Flexible prompt engineering for specific tasks
-- **Multi-GPU Support**: Automatic device distribution for large models
+- **Multi-GPU Support**: Automatic device distribution for large models (NVIDIA)
+- **Apple Silicon Support**: Native GPU acceleration on M1/M2/M3 Macs via MPS
 - **Cloud Ready**: Deploy on Kaggle, Colab, or HuggingFace Spaces
 - **HuggingFace Integration**: Automatic model downloading and caching
 
@@ -373,6 +374,66 @@ device:
   device_map: "auto"  # Automatic distribution
 ```
 
+## Apple Silicon (macOS) Support
+
+The project now supports **Apple Silicon GPU acceleration** (M1, M2, M3, M4) using Metal Performance Shaders (MPS).
+
+### Requirements
+
+- macOS 12.3 or later
+- Apple Silicon Mac (M1, M2, M3, or M4)
+- PyTorch 2.0+ (already included in requirements.txt)
+
+### Installation on macOS
+
+```bash
+# Install Poppler (required for PDF processing)
+brew install poppler
+
+# Clone the repository
+git clone https://github.com/yourusername/pdf-ocr-llm.git
+cd pdf-ocr-llm
+
+# Create virtual environment
+python3 -m venv venv
+source venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run natively (GPU acceleration works)
+python main.py serve
+```
+
+### Important Notes for macOS Users
+
+**Docker Limitation**: Docker Desktop on macOS runs in a Linux VM and **does not support GPU passthrough** for Metal/MPS. To use GPU acceleration on Apple Silicon:
+
+- ✅ **Run natively** using the installation steps above
+- ❌ **Avoid Docker** for GPU acceleration (will fall back to CPU)
+
+**Device Detection**: The system automatically detects and uses MPS when available. Check device status:
+
+```bash
+python main.py process document.pdf --model "Qwen2.5-VL-7B-Instruct" --show-device-info
+```
+
+**Performance Expectations**:
+- M1/M2/M3 Max/Ultra: Competitive with mid-range NVIDIA GPUs
+- Unified memory architecture: Larger models can use system RAM
+- MPS is slower than CUDA for equivalent GPU tier but much faster than CPU
+
+**Known Limitations**:
+- Single GPU only (no multi-GPU support on MPS)
+- Flash Attention not available (CUDA-only optimization)
+- Some rare PyTorch operations may fall back to CPU (automatic with `PYTORCH_ENABLE_MPS_FALLBACK=1` already configured)
+
+**Recommended Models for Apple Silicon**:
+- **M1/M2 (8GB)**: Qwen2.5-VL-3B, InternVL3.5-1B/2B
+- **M1/M2 Pro (16GB)**: Qwen2.5-VL-7B, InternVL3.5-4B/8B
+- **M1/M2 Max (32GB+)**: Qwen2.5-VL-7B/32B, InternVL3.5-8B/14B
+- **M1/M2 Ultra (64GB+)**: Qwen2.5-VL-32B/72B, InternVL3.5-14B/38B
+
 ## Deployment Options
 
 ### Local Development
@@ -414,7 +475,7 @@ The `--share` flag creates a temporary public URL (valid for 72 hours) that you 
 
 ### Docker Deployment
 
-Using Docker Compose:
+Using Docker Compose (Linux/Windows with NVIDIA GPU):
 ```bash
 docker-compose up
 ```
@@ -422,6 +483,8 @@ docker-compose up
 Access at:
 - UI: `http://localhost:7860`
 - API: `http://localhost:8000`
+
+**Important for macOS Users**: Docker on macOS does not support GPU passthrough. GPU acceleration is only available when running natively (see [Apple Silicon Support](#apple-silicon-macos-support) section). Docker on macOS will use CPU-only mode.
 
 ### Production Server
 

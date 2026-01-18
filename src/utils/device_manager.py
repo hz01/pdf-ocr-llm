@@ -23,69 +23,78 @@ class DeviceManager:
         
     def _detect_devices(self) -> Dict[str, Any]:
         """
-        Detect available devices (GPUs).
-        
+        Detect available devices (CUDA GPUs, Apple Silicon MPS, or CPU).
+
         Returns:
             Dictionary containing device information
         """
         devices = {
             'cuda_available': torch.cuda.is_available(),
             'cuda_device_count': 0,
+            'mps_available': torch.backends.mps.is_available() if hasattr(torch.backends, 'mps') else False,
             'cpu_available': True
         }
-        
+
         if torch.cuda.is_available():
             devices['cuda_device_count'] = torch.cuda.device_count()
             logger.info(f"Detected {devices['cuda_device_count']} CUDA device(s)")
             for i in range(devices['cuda_device_count']):
                 device_name = torch.cuda.get_device_name(i)
                 logger.info(f"  GPU {i}: {device_name}")
-        
+        elif devices['mps_available']:
+            logger.info("Detected Apple Silicon MPS device")
+        else:
+            logger.info("No GPU detected, will use CPU")
+
         return devices
     
     def get_device_map(self) -> str:
         """
         Get the appropriate device map for model loading.
-        
+
         Returns:
-            Device map string ('auto', 'cuda', or 'cpu')
+            Device map string ('auto', 'cuda:0', 'mps', or 'cpu')
         """
         if self.use_multi_gpu and self.available_devices['cuda_device_count'] > 1:
             return 'auto'
         elif self.available_devices['cuda_available']:
             return 'cuda:0'
+        elif self.available_devices['mps_available']:
+            return 'mps'
         else:
             return 'cpu'
     
     def get_device(self) -> torch.device:
         """
         Get the primary device for operations.
-        
+
         Returns:
-            PyTorch device object
+            PyTorch device object (cuda, mps, or cpu)
         """
         if self.available_devices['cuda_available']:
             return torch.device('cuda:0')
-        
+        elif self.available_devices['mps_available']:
+            return torch.device('mps')
+
         return torch.device('cpu')
     
     def get_model_kwargs(self) -> Dict[str, Any]:
         """
         Get keyword arguments for model loading with device configuration.
-        
+
         Returns:
             Dictionary of model loading kwargs
         """
         kwargs = {}
-        
+
         device_map = self.get_device_map()
         kwargs['device_map'] = device_map
-        
-        # Add memory optimization for GPUs
-        if self.available_devices['cuda_available']:
+
+        # Add memory optimization for GPUs (both CUDA and MPS support bfloat16)
+        if self.available_devices['cuda_available'] or self.available_devices['mps_available']:
             kwargs['torch_dtype'] = torch.bfloat16
             kwargs['low_cpu_mem_usage'] = True
-        
+
         return kwargs
     
     def print_device_info(self) -> None:
@@ -99,6 +108,7 @@ class DeviceManager:
             print(f"CUDA Devices: {self.available_devices['cuda_device_count']}")
             for i in range(self.available_devices['cuda_device_count']):
                 print(f"  GPU {i}: {torch.cuda.get_device_name(i)}")
+        print(f"MPS Available (Apple Silicon): {self.available_devices['mps_available']}")
         print(f"Selected Device Map: {self.get_device_map()}")
         print("=" * 60)
 

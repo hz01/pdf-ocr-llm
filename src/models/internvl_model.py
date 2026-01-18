@@ -243,6 +243,8 @@ class InternVLModel(BaseOCRModel):
             del pixel_values
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
+            elif torch.backends.mps.is_available():
+                torch.mps.empty_cache()
         
         # Clean up markdown code fences if present
         output_text = self._clean_code_fences(output_text)
