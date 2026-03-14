@@ -55,6 +55,15 @@ models:
       model_id: "zai-org/GLM-OCR"
       type: "glm_ocr"
 
+  # OCRFlux-3B (ChatDOC) — Qwen2.5-VL based, markdown output
+  # https://huggingface.co/ChatDOC/OCRFlux-3B
+  ocrflux:
+    - name: "OCRFlux-3B"
+      model_id: "ChatDOC/OCRFlux-3B"
+      type: "ocrflux"
+      max_pixels: 1280
+      min_pixels: 256
+
 inference:
   batch_size: 1
   max_new_tokens: 2048

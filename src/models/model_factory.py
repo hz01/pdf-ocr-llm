@@ -5,6 +5,7 @@ from .base_model import BaseOCRModel
 from .qwen3vl_model import Qwen3VLModel
 from .internvl_model import InternVLModel
 from .glm_ocr_model import GLMOCRModel
+from .ocrflux_model import OCRFluxModel
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +16,8 @@ class ModelFactory:
     MODEL_TYPES = {
         'qwen3vl': Qwen3VLModel,
         'internvl': InternVLModel,
-        'glm_ocr': GLMOCRModel
+        'glm_ocr': GLMOCRModel,
+        'ocrflux': OCRFluxModel,
     }
     
     @staticmethod

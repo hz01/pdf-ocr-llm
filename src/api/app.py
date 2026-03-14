@@ -114,9 +114,10 @@ async def process_pdf(
             shutil.copyfileobj(file.file, temp_pdf)
             temp_pdf_path = temp_pdf.name
         
-        # Output extension: .txt for GLM-OCR, .md for others
+        # Output extension: .txt for GLM-OCR, .json for OCRFlux, .md for others
         cfg = pipeline.config_manager.get_model_by_name(model_name)
-        out_ext = ".txt" if (cfg and cfg.get("type") == "glm_ocr") else ".md"
+        t = (cfg or {}).get("type")
+        out_ext = ".txt" if t == "glm_ocr" else (".json" if t == "ocrflux" else ".md")
         temp_output = tempfile.NamedTemporaryFile(delete=False, suffix=out_ext)
         temp_output_path = temp_output.name
         temp_output.close()
@@ -181,9 +182,10 @@ async def process_image(
             shutil.copyfileobj(file.file, temp_image)
             temp_image_path = temp_image.name
         
-        # Output extension: .txt for GLM-OCR, .md for others
+        # Output extension: .txt for GLM-OCR, .json for OCRFlux, .md for others
         cfg = pipeline.config_manager.get_model_by_name(model_name)
-        out_ext = ".txt" if (cfg and cfg.get("type") == "glm_ocr") else ".md"
+        t = (cfg or {}).get("type")
+        out_ext = ".txt" if t == "glm_ocr" else (".json" if t == "ocrflux" else ".md")
         temp_output = tempfile.NamedTemporaryFile(delete=False, suffix=out_ext)
         temp_output_path = temp_output.name
         temp_output.close()

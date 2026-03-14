@@ -65,7 +65,8 @@ max_image_size_px = pipeline.config_manager.get_ocr_config().get('max_image_size
 MODEL_GENERATION_PARAMS = {
     "qwen3vl": {"temperature": 0.1, "top_p": 0.9, "max_new_tokens": 2048, "max_slider": 4096},
     "internvl": {"temperature": 0.1, "top_p": 0.9, "max_new_tokens": 2048, "max_slider": 4096},
-    "glm_ocr": {"temperature": 0.1, "top_p": 0.9, "max_new_tokens": 8192, "max_slider": 8192, "show_temp_top_p": False},
+    "glm_ocr": {"temperature": 0.1, "top_p": 0.9, "max_new_tokens": 4096, "max_slider": 8192, "show_temp_top_p": False},
+    "ocrflux": {"temperature": 0.1, "top_p": 0.9, "max_new_tokens": 2048, "max_slider": 8192},
 }
 DEFAULT_GENERATION_PARAMS = {"temperature": 0.1, "top_p": 0.9, "max_new_tokens": 2048, "max_slider": 4096, "show_temp_top_p": True}
 
@@ -88,11 +89,18 @@ def get_generation_param_updates(model_name):
 
 
 def output_extension_for_model(model_name):
-    """Use .txt for GLM-OCR (dedicated OCR); .md for general-purpose VL models."""
+    """Use .txt for GLM-OCR, .json for OCRFlux (structured pages), .md for others."""
     if not model_name:
         return ".md"
     cfg = pipeline.config_manager.get_model_by_name(model_name)
-    return ".txt" if (cfg and cfg.get("type") == "glm_ocr") else ".md"
+    if not cfg:
+        return ".md"
+    t = cfg.get("type")
+    if t == "glm_ocr":
+        return ".txt"
+    if t == "ocrflux":
+        return ".json"
+    return ".md"
 
 # Gather system information
 def get_system_info():
@@ -417,42 +425,117 @@ def clean_extract_info_output(text):
     return text.strip()
 
 
-def process_pdf_extract_info(pdf_file, model_name, extraction_prompt, resize_high_res):
+# Image extensions supported for Extract Info
+EXTRACT_INFO_IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tiff"}
+
+
+def _normalize_extract_files(files):
+    """Return a list of file paths (Gradio may pass single path or list)."""
+    if files is None:
+        return []
+    if isinstance(files, (list, tuple)):
+        return [f for f in files if f and os.path.isfile(f)]
+    if os.path.isfile(files):
+        return [files]
+    return []
+
+
+def get_preview_for_extract(files):
     """
-    Process a PDF with GLM-OCR in information-extraction mode (JSON schema prompt).
-    Returns extracted structured info as text (JSON per page).
+    Return a list of (path, caption) for the document/image preview (left panel).
+    Supports batch: one PDF (all pages) or multiple images. GLM-OCR takes 1 image per call.
     """
-    if pdf_file is None:
-        return "", "Please upload a PDF file."
+    file_list = _normalize_extract_files(files)
+    if not file_list:
+        return None
+    out = []
+    for idx, file_path in enumerate(file_list):
+        path = Path(file_path)
+        suf = path.suffix.lower()
+        if suf == ".pdf":
+            try:
+                images = pipeline.pdf_processor.pdf_to_images(file_path, max_image_size_override=0)
+                for i, img in enumerate(images, 1):
+                    fd, temp_path = tempfile.mkstemp(suffix=".png", prefix=f"extract_preview_{idx}_p{i}_")
+                    os.close(fd)
+                    img.save(temp_path)
+                    out.append((temp_path, f"PDF{idx + 1} Page {i}" if len(file_list) > 1 else f"Page {i}"))
+            except Exception as e:
+                logger.warning(f"Preview from PDF failed: {e}")
+        elif suf in EXTRACT_INFO_IMAGE_EXTS:
+            out.append((file_path, f"Image {idx + 1}" if len(file_list) > 1 else "Image"))
+    return out if out else None
+
+
+def process_extract_info(files, model_name, extraction_prompt, resize_high_res):
+    """
+    Batch process: one PDF (all pages) or multiple images. GLM-OCR gets 1 image per call.
+    Returns one JSON array of results (one object per image/page).
+    """
+    file_list = _normalize_extract_files(files)
+    if not file_list:
+        return "", "Please upload a PDF or one or more images."
     if not model_name:
         return "", "Please select a model (GLM-OCR)."
     if not extraction_prompt or not extraction_prompt.strip():
         return "", "Please provide an extraction prompt (JSON schema instruction)."
+    import json as json_mod
+    prompt = extraction_prompt.strip()
+    max_override = pipeline.pdf_processor.max_image_size if resize_high_res else 0
     try:
         start = time.perf_counter()
-        ext = ".json"
-        with tempfile.NamedTemporaryFile(delete=False, suffix=ext, mode="w", encoding="utf-8") as temp_output:
-            temp_output_path = temp_output.name
-
-        result = pipeline.process_pdf(
-            pdf_path=pdf_file,
-            model_name=model_name,
-            output_path=temp_output_path,
-            prompt=extraction_prompt.strip(),
-            temperature=0.1,
-            top_p=0.9,
-            max_new_tokens=8192,
-            resize_high_res=resize_high_res,
-        )
-
-        with open(temp_output_path, "r", encoding="utf-8") as f:
-            output_text = f.read()
-        os.unlink(temp_output_path)
-
+        pipeline.load_model(model_name)
+        results_list = []
+        total_images = 0
+        for file_path in file_list:
+            path = Path(file_path)
+            suf = path.suffix.lower()
+            if suf == ".pdf":
+                images = pipeline.pdf_processor.pdf_to_images(file_path, max_image_size_override=max_override)
+                for img in images:
+                    fd, temp_path = tempfile.mkstemp(suffix=".png", prefix="extract_")
+                    os.close(fd)
+                    try:
+                        img.save(temp_path)
+                        result = pipeline.process_image(
+                            image_path=temp_path,
+                            model_name=None,
+                            output_path=None,
+                            prompt=prompt,
+                            temperature=0.1,
+                            top_p=0.9,
+                            max_new_tokens=8192,
+                            resize_high_res=False,
+                        )
+                        text = clean_extract_info_output(result.get("text", ""))
+                        try:
+                            results_list.append(json_mod.loads(text))
+                        except (TypeError, json_mod.JSONDecodeError):
+                            results_list.append({"natural_text": text})
+                        total_images += 1
+                    finally:
+                        if os.path.isfile(temp_path):
+                            os.unlink(temp_path)
+            elif suf in EXTRACT_INFO_IMAGE_EXTS:
+                result = pipeline.process_image(
+                    image_path=file_path,
+                    model_name=None,
+                    output_path=None,
+                    prompt=prompt,
+                    temperature=0.1,
+                    top_p=0.9,
+                    max_new_tokens=8192,
+                    resize_high_res=resize_high_res,
+                )
+                text = clean_extract_info_output(result.get("text", ""))
+                try:
+                    results_list.append(json_mod.loads(text))
+                except (TypeError, json_mod.JSONDecodeError):
+                    results_list.append({"natural_text": text})
+                total_images += 1
         elapsed = time.perf_counter() - start
-        status = (
-            f"Extracted info from {result.get('num_pages', 0)} page(s) in {elapsed:.2f} s"
-        )
+        status = f"Extracted info from {total_images} image(s) in {elapsed:.2f} s (1 image per GLM-OCR call)"
+        output_text = json_mod.dumps(results_list, indent=2, ensure_ascii=False)
         return output_text, status
     except Exception as e:
         logger.error(f"Extract info failed: {e}")
@@ -707,45 +790,61 @@ with gr.Blocks(title="PDF OCR with Vision Language Models", theme=custom_theme) 
                 outputs=[image_download]
             )
 
-        # Extract Info from PDF (GLM-OCR, information extraction with JSON schema)
-        with gr.Tab("Extract Info from PDF"):
+        # Extract Info (batch: 1 PDF or multiple images) — GLM-OCR, 1 image per call; compare preview left vs result right
+        with gr.Tab("Extract Info"):
+            extract_file_input = gr.File(
+                label="Upload 1 PDF (all pages) or multiple images",
+                file_types=[".pdf", ".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tiff"],
+                file_count="multiple",
+                type="filepath",
+            )
             with gr.Row():
-                with gr.Column():
-                    extract_pdf_input = gr.File(
-                        label="Upload PDF",
-                        file_types=[".pdf"],
+                extract_model = gr.Dropdown(
+                    choices=extract_info_models,
+                    value=extract_info_models[0] if extract_info_models else None,
+                    label="Model",
+                    info="GLM-OCR only (information extraction mode)",
+                    interactive=len(extract_info_models) > 1,
+                )
+                extract_resize = gr.Checkbox(
+                    value=True,
+                    label="Resize high-resolution images (faster)",
+                    info=f"If checked, images with longest side > {max_image_size_px}px are resized.",
+                )
+            extract_prompt = gr.Textbox(
+                label="Extraction prompt (JSON schema)",
+                placeholder="Use the default or paste your JSON schema instruction...",
+                value=DEFAULT_EXTRACT_INFO_PROMPT,
+                lines=18,
+                info="Strict JSON schema.",
+            )
+            extract_button = gr.Button("Extract Info", variant="primary")
+            gr.Markdown("**Compare:** documents/images on the left, extracted JSON array on the right. GLM-OCR processes 1 image per call (each PDF page or each uploaded image).")
+            with gr.Row():
+                with gr.Column(scale=1):
+                    extract_preview = gr.Gallery(
+                        label="Preview (all PDF pages or all uploaded images)",
                         type="filepath",
+                        show_label=True,
+                        columns=2,
+                        object_fit="contain",
+                        height="auto",
                     )
-                    extract_model = gr.Dropdown(
-                        choices=extract_info_models,
-                        value=extract_info_models[0] if extract_info_models else None,
-                        label="Model",
-                        info="GLM-OCR only (information extraction mode)",
-                        interactive=len(extract_info_models) > 1,
-                    )
-                    extract_prompt = gr.Textbox(
-                        label="Extraction prompt (JSON schema)",
-                        placeholder="Use the default or paste your JSON schema instruction...",
-                        value=DEFAULT_EXTRACT_INFO_PROMPT,
-                        lines=22,
-                        info="Strict JSON schema.",
-                    )
-                    extract_resize = gr.Checkbox(
-                        value=True,
-                        label="Resize high-resolution images (faster)",
-                        info=f"If checked, images with longest side > {max_image_size_px}px are resized.",
-                    )
-                    extract_button = gr.Button("Extract Info", variant="primary")
-                with gr.Column():
+                with gr.Column(scale=1):
                     extract_status = gr.Textbox(label="Status", interactive=False)
                     extract_output = gr.Textbox(
                         label="Extracted structured info (JSON)",
-                        lines=20,
+                        lines=22,
                     )
                     extract_download = gr.File(label="Download as JSON")
+            extract_file_input.change(
+                fn=get_preview_for_extract,
+                inputs=[extract_file_input],
+                outputs=[extract_preview],
+            )
             extract_button.click(
-                fn=process_pdf_extract_info,
-                inputs=[extract_pdf_input, extract_model, extract_prompt, extract_resize],
+                fn=process_extract_info,
+                inputs=[extract_file_input, extract_model, extract_prompt, extract_resize],
                 outputs=[extract_output, extract_status],
             )
             extract_output.change(
@@ -775,7 +874,7 @@ with gr.Blocks(title="PDF OCR with Vision Language Models", theme=custom_theme) 
 - **PDF Processing**: Convert PDF pages to images and extract text
 - **Batch PDF Processing**: Process multiple PDFs at once, download results as ZIP
 - **Image Processing**: Extract text from images directly
-- **Extract Info from PDF**: GLM-OCR information extraction with a strict JSON schema (e.g. ID cards, forms)
+- **Extract Info**: Upload a PDF or image; GLM-OCR extracts structured JSON (e.g. ID cards, forms). Compare view: document left, result right.
 - **Custom Prompts**: Provide specific instructions for extraction
 - **Markdown Output**: Results in clean, formatted markdown (or plain text for GLM-OCR)
 - **Download**: Save results as `.md`, `.txt` (GLM-OCR), `.json` (extract info), or ZIP archives

@@ -181,7 +181,7 @@ class GLMOCRModel(BaseOCRModel):
             with torch.no_grad():
                 generated_ids = self.model.generate(
                     **inputs,
-                    max_new_tokens=self.inference_config.get("max_new_tokens", 8192),
+                    max_new_tokens=self.inference_config.get("max_new_tokens", 4096),
                 )
 
             # Decode only the generated part (per model card)

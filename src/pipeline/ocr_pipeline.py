@@ -1,6 +1,8 @@
 from pathlib import Path
 from typing import List, Dict, Any, Union, Optional
 from PIL import Image
+import json
+import re
 import logging
 from tqdm import tqdm
 
@@ -191,11 +193,23 @@ class OCRPipeline:
                     'error': str(e)
                 })
         
-        # Combine pages: markdown headers for VLMs; raw concatenation for GLM-OCR (its own output)
+        # Combine pages: markdown headers for VLMs; raw for GLM-OCR; JSON array for OCRFlux (easy to parse)
         model_config = self.config_manager.get_model_by_name(self.current_model_name)
-        use_markdown_headers = model_config and model_config.get("type") != "glm_ocr"
+        model_type = (model_config or {}).get("type")
+        use_markdown_headers = model_config and model_type not in ("glm_ocr", "ocrflux")
         if use_markdown_headers:
             full_text = "\n\n".join([f"# Page {page['page_number']}\n\n{page['text']}" for page in page_texts])
+        elif model_type == "ocrflux":
+            # OCRFlux returns JSON per page (e.g. primary_language, natural_text). Output a single JSON array for easy parsing.
+            pages_list = []
+            for page in page_texts:
+                raw = (page.get("text") or "").strip()
+                raw = re.sub(r"^#\s*Page\s+\d+\s*\n*", "", raw, flags=re.IGNORECASE).strip()
+                try:
+                    pages_list.append(json.loads(raw))
+                except (json.JSONDecodeError, TypeError):
+                    pages_list.append({"page_number": page["page_number"], "natural_text": raw})
+            full_text = json.dumps(pages_list, indent=2, ensure_ascii=False)
         else:
             full_text = "\n\n".join([page["text"] for page in page_texts])
         
