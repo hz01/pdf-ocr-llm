@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import List, Dict, Any, Union
+from typing import List, Dict, Any, Union, Optional
 from PIL import Image
 import pdf2image
 import logging
@@ -19,13 +19,37 @@ class PDFProcessor:
         """
         self.dpi = ocr_config.get('dpi', 300)
         self.image_quality = ocr_config.get('image_quality', 95)
-        
-    def pdf_to_images(self, pdf_path: Union[str, Path]) -> List[Image.Image]:
+        self.max_image_size = ocr_config.get('max_image_size', 1536)
+
+    def resize_for_model(self, image: Image.Image, max_side: Optional[int] = None) -> Image.Image:
+        """
+        Resize image so longest side <= max_side; preserves aspect ratio.
+        If max_side is None, use config max_image_size. If max_side <= 0, return image unchanged.
+        """
+        effective = max_side if max_side is not None else self.max_image_size
+        if effective <= 0:
+            return image
+        w, h = image.size
+        if max(w, h) <= effective:
+            return image
+        if w >= h:
+            new_w = effective
+            new_h = int(h * (effective / w))
+        else:
+            new_h = effective
+            new_w = int(w * (effective / h))
+        return image.resize((new_w, new_h), Image.Resampling.LANCZOS)
+
+    def pdf_to_images(
+        self, pdf_path: Union[str, Path], max_image_size_override: Optional[int] = None
+    ) -> List[Image.Image]:
         """
         Convert a PDF file to a list of PIL Images.
         
         Args:
             pdf_path: Path to the PDF file
+            max_image_size_override: If set, use for resize: 0 = no resize, >0 = max longest side.
+                If None, use config max_image_size (resize when > 0).
             
         Returns:
             List of PIL Image objects, one per page
@@ -47,7 +71,11 @@ class PDFProcessor:
                 dpi=self.dpi,
                 fmt='PNG'
             )
-            
+            # Optionally resize high-resolution pages (keeps aspect ratio)
+            max_side = max_image_size_override if max_image_size_override is not None else self.max_image_size
+            if max_side > 0:
+                images = [self.resize_for_model(im, max_side) for im in images]
+                logger.info(f"Resized pages to max longest side {max_side}px")
             logger.info(f"Successfully converted {len(images)} page(s) from PDF")
             return images
             

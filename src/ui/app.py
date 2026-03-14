@@ -8,6 +8,7 @@ using Qwen 2.5 VL models.
 import gradio as gr
 import tempfile
 import os
+import time
 from pathlib import Path
 import logging
 import zipfile
@@ -30,6 +31,42 @@ pipeline = OCRPipeline("config.yaml")
 
 # Get available models
 available_models = [model['name'] for model in pipeline.list_available_models()]
+
+# Models that support information extraction (GLM-OCR with JSON schema prompts)
+extract_info_models = [
+    m["name"] for m in pipeline.list_available_models()
+    if m.get("type") == "glm_ocr"
+]
+
+# Default extraction prompt for GLM-OCR information extraction (strict JSON schema)
+DEFAULT_EXTRACT_INFO_PROMPT = """{
+    "id_number": "",
+    "last_name": "",
+    "first_name": "",
+    "date_of_birth": "",
+    "address": {
+        "street": "",
+        "city": "",
+        "state": "",
+        "zip_code": ""
+    },
+    "dates": {
+        "issue_date": "",
+        "expiration_date": ""
+    },
+    "sex": ""
+}"""
+
+# Resize threshold from config (for checkbox label)
+max_image_size_px = pipeline.config_manager.get_ocr_config().get('max_image_size', 1536)
+
+
+def output_extension_for_model(model_name):
+    """Use .txt for GLM-OCR (dedicated OCR); .md for general-purpose VL models."""
+    if not model_name:
+        return ".md"
+    cfg = pipeline.config_manager.get_model_by_name(model_name)
+    return ".txt" if (cfg and cfg.get("type") == "glm_ocr") else ".md"
 
 # Gather system information
 def get_system_info():
@@ -81,13 +118,22 @@ def get_system_info():
         info['pillow_version'] = PIL.__version__
     except:
         info['pillow_version'] = "Unknown"
-    
+
+    # Flash Attention (used by some models for faster inference)
+    try:
+        import flash_attn
+        info['flash_attn_installed'] = True
+        info['flash_attn_version'] = getattr(flash_attn, '__version__', 'unknown')
+    except ImportError:
+        info['flash_attn_installed'] = False
+        info['flash_attn_version'] = None
+
     return info
 
 system_info = get_system_info()
 
 
-def process_pdf(pdf_file, model_name, custom_prompt, temperature, top_p, max_tokens):
+def process_pdf(pdf_file, model_name, custom_prompt, temperature, top_p, max_tokens, resize_high_res):
     """
     Process a PDF file and extract text.
     
@@ -98,6 +144,7 @@ def process_pdf(pdf_file, model_name, custom_prompt, temperature, top_p, max_tok
         temperature: Sampling temperature
         top_p: Top-p sampling
         max_tokens: Maximum output tokens
+        resize_high_res: If True, resize images above threshold (faster)
     
     Returns:
         Extracted markdown text
@@ -109,8 +156,8 @@ def process_pdf(pdf_file, model_name, custom_prompt, temperature, top_p, max_tok
         return "Please select a model."
     
     try:
-        # Create temp output file
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".md", mode='w', encoding='utf-8') as temp_output:
+        ext = output_extension_for_model(model_name)
+        with tempfile.NamedTemporaryFile(delete=False, suffix=ext, mode='w', encoding='utf-8') as temp_output:
             temp_output_path = temp_output.name
         
         # Process PDF
@@ -124,7 +171,8 @@ def process_pdf(pdf_file, model_name, custom_prompt, temperature, top_p, max_tok
             prompt=prompt,
             temperature=temperature,
             top_p=top_p,
-            max_new_tokens=int(max_tokens)
+            max_new_tokens=int(max_tokens),
+            resize_high_res=resize_high_res
         )
         
         # Read the output
@@ -144,7 +192,7 @@ def process_pdf(pdf_file, model_name, custom_prompt, temperature, top_p, max_tok
         return f"Error: {str(e)}", f"Processing failed: {str(e)}"
 
 
-def process_image(image_file, model_name, custom_prompt, temperature, top_p, max_tokens):
+def process_image(image_file, model_name, custom_prompt, temperature, top_p, max_tokens, resize_high_res):
     """
     Process an image file and extract text.
     
@@ -155,6 +203,7 @@ def process_image(image_file, model_name, custom_prompt, temperature, top_p, max
         temperature: Sampling temperature
         top_p: Top-p sampling
         max_tokens: Maximum output tokens
+        resize_high_res: If True, resize images above threshold (faster)
     
     Returns:
         Extracted markdown text
@@ -166,8 +215,8 @@ def process_image(image_file, model_name, custom_prompt, temperature, top_p, max
         return "Please select a model."
     
     try:
-        # Create temp output file
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".md", mode='w', encoding='utf-8') as temp_output:
+        ext = output_extension_for_model(model_name)
+        with tempfile.NamedTemporaryFile(delete=False, suffix=ext, mode='w', encoding='utf-8') as temp_output:
             temp_output_path = temp_output.name
         
         # Process image
@@ -181,7 +230,8 @@ def process_image(image_file, model_name, custom_prompt, temperature, top_p, max
             prompt=prompt,
             temperature=temperature,
             top_p=top_p,
-            max_new_tokens=int(max_tokens)
+            max_new_tokens=int(max_tokens),
+            resize_high_res=resize_high_res
         )
         
         # Read the output
@@ -201,17 +251,17 @@ def process_image(image_file, model_name, custom_prompt, temperature, top_p, max
         return f"Error: {str(e)}", f"Processing failed: {str(e)}"
 
 
-def download_markdown(markdown_text):
-    """Create a downloadable markdown file."""
-    if not markdown_text or markdown_text.startswith("Error") or markdown_text.startswith("Please"):
+def download_result(text, model_name=None):
+    """Create a downloadable file. Uses .txt for GLM-OCR, .md for other models."""
+    if not text or text.startswith("Error") or text.startswith("Please"):
         return None
-    
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".md", mode='w', encoding='utf-8') as f:
-        f.write(markdown_text)
+    ext = output_extension_for_model(model_name)
+    with tempfile.NamedTemporaryFile(delete=False, suffix=ext, mode='w', encoding='utf-8') as f:
+        f.write(text)
         return f.name
 
 
-def process_batch_pdfs(pdf_files, model_name, temperature, top_p, max_tokens, progress=gr.Progress()):
+def process_batch_pdfs(pdf_files, model_name, temperature, top_p, max_tokens, resize_high_res, progress=gr.Progress()):
     """
     Process multiple PDF files and create a zip with results.
     
@@ -221,6 +271,7 @@ def process_batch_pdfs(pdf_files, model_name, temperature, top_p, max_tokens, pr
         temperature: Sampling temperature
         top_p: Top-p sampling
         max_tokens: Maximum output tokens
+        resize_high_res: If True, resize images above threshold (faster)
         progress: Gradio progress tracker
     
     Returns:
@@ -241,6 +292,7 @@ def process_batch_pdfs(pdf_files, model_name, temperature, top_p, max_tokens, pr
         logger.info(f"Processing {total_files} PDFs with model: {model_name}")
         
         # Process each PDF
+        ext = output_extension_for_model(model_name)
         for idx, pdf_file in enumerate(pdf_files, 1):
             # Update progress
             progress(idx / total_files, desc=f"Processing {idx}/{total_files}: {Path(pdf_file.name).name}")
@@ -248,7 +300,7 @@ def process_batch_pdfs(pdf_files, model_name, temperature, top_p, max_tokens, pr
             try:
                 # Get original filename without extension
                 pdf_name = Path(pdf_file.name).stem
-                output_path = os.path.join(output_dir, f"{pdf_name}.md")
+                output_path = os.path.join(output_dir, f"{pdf_name}{ext}")
                 
                 # Process PDF
                 result = pipeline.process_pdf(
@@ -257,7 +309,8 @@ def process_batch_pdfs(pdf_files, model_name, temperature, top_p, max_tokens, pr
                     output_path=output_path,
                     temperature=temperature,
                     top_p=top_p,
-                    max_new_tokens=int(max_tokens)
+                    max_new_tokens=int(max_tokens),
+                    resize_high_res=resize_high_res
                 )
                 
                 results.append({
@@ -280,8 +333,8 @@ def process_batch_pdfs(pdf_files, model_name, temperature, top_p, max_tokens, pr
         zip_path = os.path.join(output_dir, f"ocr_results_{timestamp}.zip")
         
         with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-            for md_file in Path(output_dir).glob("*.md"):
-                zipf.write(md_file, md_file.name)
+            for out_file in Path(output_dir).glob(f"*{ext}"):
+                zipf.write(out_file, out_file.name)
         
         # Prepare status message
         progress(1.0, desc="Complete!")
@@ -303,6 +356,89 @@ def process_batch_pdfs(pdf_files, model_name, temperature, top_p, max_tokens, pr
     except Exception as e:
         logger.error(f"Error in batch processing: {e}")
         return None, f"✗ Batch processing failed: {str(e)}"
+
+
+def clean_extract_info_output(text):
+    """
+    Strip non-JSON cruft from GLM-OCR extract-info output:
+    '# Page N' headers, ```json/``` fences (3+ backticks), trailing special tokens (<|user|>, etc.).
+    """
+    import re
+    if not text or not text.strip():
+        return text
+    text = text.strip()
+    # Strip trailing special tokens and any trailing backticks (model may emit <|user|> or ```<|user|>)
+    text = re.sub(r"<\|[^|]+\|>\s*$", "", text)
+    text = re.sub(r"`+\s*$", "", text.strip())
+    text = text.strip()
+    # Strip leading "# Page N" lines
+    text = re.sub(r"^#\s*Page\s+\d+\s*\n*", "", text, flags=re.IGNORECASE)
+    text = text.strip()
+    # Unwrap code blocks: 3+ backticks, optional "json", then content, then 3+ backticks
+    def unwrap_code_blocks(s):
+        out = []
+        for m in re.finditer(r"`{3,}(?:json)?\s*\n?(.*?)`{3,}", s, re.DOTALL):
+            out.append(m.group(1).strip())
+        if out:
+            return "\n\n".join(out)
+        return s
+    text = unwrap_code_blocks(text)
+    text = text.strip()
+    # If still starts with backticks or "json" (no match above), strip them
+    text = re.sub(r"^`+(?:json)?\s*\n?", "", text)
+    text = re.sub(r"`+\s*$", "", text)
+    return text.strip()
+
+
+def process_pdf_extract_info(pdf_file, model_name, extraction_prompt, resize_high_res):
+    """
+    Process a PDF with GLM-OCR in information-extraction mode (JSON schema prompt).
+    Returns extracted structured info as text (JSON per page).
+    """
+    if pdf_file is None:
+        return "", "Please upload a PDF file."
+    if not model_name:
+        return "", "Please select a model (GLM-OCR)."
+    if not extraction_prompt or not extraction_prompt.strip():
+        return "", "Please provide an extraction prompt (JSON schema instruction)."
+    try:
+        start = time.perf_counter()
+        ext = ".json"
+        with tempfile.NamedTemporaryFile(delete=False, suffix=ext, mode="w", encoding="utf-8") as temp_output:
+            temp_output_path = temp_output.name
+
+        result = pipeline.process_pdf(
+            pdf_path=pdf_file,
+            model_name=model_name,
+            output_path=temp_output_path,
+            prompt=extraction_prompt.strip(),
+            temperature=0.1,
+            top_p=0.9,
+            max_new_tokens=8192,
+            resize_high_res=resize_high_res,
+        )
+
+        with open(temp_output_path, "r", encoding="utf-8") as f:
+            output_text = f.read()
+        os.unlink(temp_output_path)
+
+        elapsed = time.perf_counter() - start
+        status = (
+            f"Extracted info from {result.get('num_pages', 0)} page(s) in {elapsed:.2f} s"
+        )
+        return output_text, status
+    except Exception as e:
+        logger.error(f"Extract info failed: {e}")
+        return "", f"Extraction failed: {str(e)}"
+
+
+def download_extract_result(text):
+    """Create a downloadable JSON file for extract-info tab."""
+    if not text or text.startswith("Please") or text.startswith("Error") or text.startswith("Extraction failed"):
+        return None
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".json", mode="w", encoding="utf-8") as f:
+        f.write(text)
+        return f.name
 
 
 # Create Gradio interface with custom theme
@@ -369,26 +505,30 @@ with gr.Blocks(title="PDF OCR with Vision Language Models", theme=custom_theme) 
                             info="Maximum length of generated text"
                         )
                     
+                    pdf_resize_high_res = gr.Checkbox(
+                        value=True,
+                        label="Resize high-resolution images (faster)",
+                        info=f"If checked, images with longest side > {max_image_size_px}px are resized (keeps aspect ratio). Uncheck to use original resolution."
+                    )
                     pdf_button = gr.Button("Process PDF", variant="primary")
                 
                 with gr.Column():
                     pdf_status = gr.Textbox(label="Status", interactive=False)
                     pdf_output = gr.Textbox(
                         label="Extracted Markdown",
-                        lines=20,
-                        show_copy_button=True
+                        lines=20
                     )
                     pdf_download = gr.File(label="Download Result")
             
             pdf_button.click(
                 fn=process_pdf,
-                inputs=[pdf_input, pdf_model, pdf_prompt, pdf_temperature, pdf_top_p, pdf_max_tokens],
+                inputs=[pdf_input, pdf_model, pdf_prompt, pdf_temperature, pdf_top_p, pdf_max_tokens, pdf_resize_high_res],
                 outputs=[pdf_output, pdf_status]
             )
             
             pdf_output.change(
-                fn=download_markdown,
-                inputs=[pdf_output],
+                fn=download_result,
+                inputs=[pdf_output, pdf_model],
                 outputs=[pdf_download]
             )
         
@@ -436,6 +576,11 @@ with gr.Blocks(title="PDF OCR with Vision Language Models", theme=custom_theme) 
                             info="Maximum length of generated text"
                         )
                     
+                    batch_resize_high_res = gr.Checkbox(
+                        value=True,
+                        label="Resize high-resolution images (faster)",
+                        info=f"If checked, images with longest side > {max_image_size_px}px are resized. Uncheck to use original resolution."
+                    )
                     batch_button = gr.Button("Process All PDFs", variant="primary")
                 
                 with gr.Column():
@@ -448,7 +593,7 @@ with gr.Blocks(title="PDF OCR with Vision Language Models", theme=custom_theme) 
             
             batch_button.click(
                 fn=process_batch_pdfs,
-                inputs=[batch_input, batch_model, batch_temperature, batch_top_p, batch_max_tokens],
+                inputs=[batch_input, batch_model, batch_temperature, batch_top_p, batch_max_tokens, batch_resize_high_res],
                 outputs=[batch_download, batch_status]
             )
         
@@ -499,27 +644,78 @@ with gr.Blocks(title="PDF OCR with Vision Language Models", theme=custom_theme) 
                             info="Maximum length of generated text"
                         )
                     
+                    image_resize_high_res = gr.Checkbox(
+                        value=True,
+                        label="Resize high-resolution images (faster)",
+                        info=f"If checked, images with longest side > {max_image_size_px}px are resized (keeps aspect ratio). Uncheck to use original resolution."
+                    )
                     image_button = gr.Button("Process Image", variant="primary")
                 
                 with gr.Column():
                     image_status = gr.Textbox(label="Status", interactive=False)
                     image_output = gr.Textbox(
                         label="Extracted Markdown",
-                        lines=20,
-                        show_copy_button=True
+                        lines=20
                     )
                     image_download = gr.File(label="Download Result")
             
             image_button.click(
                 fn=process_image,
-                inputs=[image_input, image_model, image_prompt, image_temperature, image_top_p, image_max_tokens],
+                inputs=[image_input, image_model, image_prompt, image_temperature, image_top_p, image_max_tokens, image_resize_high_res],
                 outputs=[image_output, image_status]
             )
             
             image_output.change(
-                fn=download_markdown,
-                inputs=[image_output],
+                fn=download_result,
+                inputs=[image_output, image_model],
                 outputs=[image_download]
+            )
+
+        # Extract Info from PDF (GLM-OCR, information extraction with JSON schema)
+        with gr.Tab("Extract Info from PDF"):
+            with gr.Row():
+                with gr.Column():
+                    extract_pdf_input = gr.File(
+                        label="Upload PDF",
+                        file_types=[".pdf"],
+                        type="filepath",
+                    )
+                    extract_model = gr.Dropdown(
+                        choices=extract_info_models,
+                        value=extract_info_models[0] if extract_info_models else None,
+                        label="Model",
+                        info="GLM-OCR only (information extraction mode)",
+                        interactive=len(extract_info_models) > 1,
+                    )
+                    extract_prompt = gr.Textbox(
+                        label="Extraction prompt (JSON schema)",
+                        placeholder="Use the default or paste your JSON schema instruction...",
+                        value=DEFAULT_EXTRACT_INFO_PROMPT,
+                        lines=22,
+                        info="Strict JSON schema.",
+                    )
+                    extract_resize = gr.Checkbox(
+                        value=True,
+                        label="Resize high-resolution images (faster)",
+                        info=f"If checked, images with longest side > {max_image_size_px}px are resized.",
+                    )
+                    extract_button = gr.Button("Extract Info", variant="primary")
+                with gr.Column():
+                    extract_status = gr.Textbox(label="Status", interactive=False)
+                    extract_output = gr.Textbox(
+                        label="Extracted structured info (JSON)",
+                        lines=20,
+                    )
+                    extract_download = gr.File(label="Download as JSON")
+            extract_button.click(
+                fn=process_pdf_extract_info,
+                inputs=[extract_pdf_input, extract_model, extract_prompt, extract_resize],
+                outputs=[extract_output, extract_status],
+            )
+            extract_output.change(
+                fn=download_extract_result,
+                inputs=[extract_output],
+                outputs=[extract_download],
             )
         
         # Information Tab
@@ -543,9 +739,10 @@ with gr.Blocks(title="PDF OCR with Vision Language Models", theme=custom_theme) 
 - **PDF Processing**: Convert PDF pages to images and extract text
 - **Batch PDF Processing**: Process multiple PDFs at once, download results as ZIP
 - **Image Processing**: Extract text from images directly
+- **Extract Info from PDF**: GLM-OCR information extraction with a strict JSON schema (e.g. ID cards, forms)
 - **Custom Prompts**: Provide specific instructions for extraction
-- **Markdown Output**: Results in clean, formatted markdown
-- **Download**: Save results as `.md` files or ZIP archives
+- **Markdown Output**: Results in clean, formatted markdown (or plain text for GLM-OCR)
+- **Download**: Save results as `.md`, `.txt` (GLM-OCR), `.json` (extract info), or ZIP archives
 
 ## Tips
 
@@ -574,6 +771,7 @@ You can provide custom prompts for specific extraction tasks:
 - **Gradio**: {system_info['gradio_version']}
 - **Accelerate**: {system_info['accelerate_version']}
 - **Pillow**: {system_info['pillow_version']}
+- **Flash Attention**: {"✅ Yes" if system_info['flash_attn_installed'] else "❌ No"}{f" (v{system_info['flash_attn_version']})" if system_info.get('flash_attn_installed') and system_info.get('flash_attn_version') else ""}
 
 ### Configuration
 - **Pipeline Status**: Ready

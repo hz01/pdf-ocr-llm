@@ -25,7 +25,14 @@ class BaseOCRModel(ABC):
     def load_model(self) -> None:
         """Load the model and associated components."""
         pass
-    
+
+    def warmup(self) -> None:
+        """
+        Run a minimal inference to initialize CUDA and avoid slow first real inference.
+        Override in subclasses. Default is no-op.
+        """
+        pass
+
     @abstractmethod
     def process_image(self, image: Image.Image, prompt: str = None) -> str:
         """

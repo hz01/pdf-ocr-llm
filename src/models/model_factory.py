@@ -2,9 +2,9 @@ from typing import Dict, Any
 import logging
 
 from .base_model import BaseOCRModel
-from .qwen25vl_model import Qwen25VLModel
 from .qwen3vl_model import Qwen3VLModel
 from .internvl_model import InternVLModel
+from .glm_ocr_model import GLMOCRModel
 
 logger = logging.getLogger(__name__)
 
@@ -13,9 +13,9 @@ class ModelFactory:
     """Factory class for creating OCR model instances."""
     
     MODEL_TYPES = {
-        'qwen25vl': Qwen25VLModel,
         'qwen3vl': Qwen3VLModel,
-        'internvl': InternVLModel
+        'internvl': InternVLModel,
+        'glm_ocr': GLMOCRModel
     }
     
     @staticmethod

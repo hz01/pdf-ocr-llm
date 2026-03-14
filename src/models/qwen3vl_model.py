@@ -59,6 +59,13 @@ class Qwen3VLModel(BaseOCRModel):
             
             # Get device configuration
             model_kwargs = self.device_manager.get_model_kwargs()
+            # Use Flash Attention 2 when available (faster + better precision)
+            try:
+                import flash_attn
+                model_kwargs['attn_implementation'] = 'flash_attention_2'
+                logger.info("Flash Attention 2 is available, enabling it for Qwen3-VL")
+            except ImportError:
+                logger.warning("Flash Attention 2 not installed; using default attention (slower, consider installing flash-attn)")
             
             # Import and load Qwen3VL model
             try:
@@ -91,13 +98,60 @@ class Qwen3VLModel(BaseOCRModel):
             
             # Set model to evaluation mode
             self.model.eval()
+
+            # Optional: torch.compile to reduce Python overhead (PyTorch 2.0+, first run compiles)
+            if self.inference_config.get('use_torch_compile', False):
+                compile_fn = getattr(torch, 'compile', None)
+                if compile_fn is not None:
+                    try:
+                        self.model = compile_fn(self.model, mode='reduce-overhead')
+                        logger.info("torch.compile enabled (mode=reduce-overhead)")
+                    except Exception as e:
+                        logger.warning(f"torch.compile failed, using plain model: {e}")
+                else:
+                    logger.warning("use_torch_compile is true but torch.compile not available (PyTorch 2.0+)")
+
+            # Log actual model device (critical: must be GPU for speed)
+            try:
+                model_dev = next(self.model.parameters()).device
+                if str(model_dev).startswith('cuda'):
+                    logger.info(f"Model is on GPU: {model_dev}")
+                else:
+                    logger.warning(f"Model is on CPU: {model_dev} — inference will be very slow. Check device_map and CUDA.")
+            except Exception as e:
+                logger.warning(f"Could not determine model device: {e}")
             
             logger.info(f"Successfully loaded {self.model_config['name']}")
             
         except Exception as e:
             logger.error(f"Failed to load model: {e}")
             raise
-    
+
+    def warmup(self) -> None:
+        """Run a minimal inference to initialize CUDA and avoid slow first real inference."""
+        if self.model is None or self.processor is None:
+            return
+        try:
+            warmup_image = Image.new("RGB", (64, 64), color=(255, 255, 255))
+            messages = [
+                {"role": "user", "content": [{"type": "image", "image": warmup_image}, {"type": "text", "text": "Hi"}]}
+            ]
+            inputs = self.processor.apply_chat_template(
+                messages, tokenize=True, add_generation_prompt=True, return_dict=True, return_tensors="pt"
+            )
+            model_dev = next(self.model.parameters()).device
+            if hasattr(inputs, 'to'):
+                inputs = inputs.to(model_dev)
+            else:
+                inputs = {k: v.to(model_dev) if isinstance(v, torch.Tensor) else v for k, v in inputs.items()}
+            with torch.no_grad():
+                self.model.generate(**inputs, max_new_tokens=5)
+            if torch.cuda.is_available():
+                torch.cuda.synchronize()
+            logger.info("Qwen3-VL warmup done.")
+        except Exception as e:
+            logger.warning(f"Warmup failed (non-fatal): {e}")
+
     def process_image(self, image: Image.Image, prompt: str = None) -> str:
         """
         Process a single image and extract text using Qwen 3 VL.
@@ -136,8 +190,16 @@ class Qwen3VLModel(BaseOCRModel):
             return_tensors="pt"
         )
         
-        # Move inputs to device
-        inputs = inputs.to(self.model.device)
+        # Move inputs to device (must match model device)
+        model_dev = next(self.model.parameters()).device
+        if hasattr(inputs, 'to'):
+            inputs = inputs.to(model_dev)
+        else:
+            inputs = {k: v.to(model_dev) if isinstance(v, torch.Tensor) else v for k, v in inputs.items()}
+        if str(model_dev).startswith('cuda'):
+            logger.info(f"Qwen3-VL process_image: running on GPU {model_dev} (image size {image.size})")
+        else:
+            logger.warning(f"Qwen3-VL process_image: model on CPU {model_dev} — inference will be very slow")
         
         # Generate (following official docs)
         with torch.no_grad():
@@ -147,8 +209,9 @@ class Qwen3VLModel(BaseOCRModel):
             )
         
         # Trim generated tokens to remove input (following official docs)
+        input_ids_tensor = inputs.input_ids if hasattr(inputs, 'input_ids') else inputs['input_ids']
         generated_ids_trimmed = [
-            out_ids[len(in_ids):] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
+            out_ids[len(in_seq):] for in_seq, out_ids in zip(input_ids_tensor, generated_ids)
         ]
         
         # Decode output (following official docs)
@@ -213,6 +276,12 @@ class Qwen3VLModel(BaseOCRModel):
                 ]
                 all_messages.append(messages)
             
+            model_dev = next(self.model.parameters()).device
+            if str(model_dev).startswith('cuda'):
+                logger.info(f"Qwen3-VL process_batch: batch {i // batch_size + 1}, size {len(batch_images)}, device={model_dev}")
+            else:
+                logger.warning(f"Qwen3-VL process_batch: model on CPU {model_dev} — inference will be very slow")
+            
             # Process each image
             for messages in all_messages:
                 try:
@@ -226,7 +295,7 @@ class Qwen3VLModel(BaseOCRModel):
                     )
                     
                     # Move to device
-                    inputs = inputs.to(self.model.device)
+                    inputs = inputs.to(model_dev)
                     
                     # Generate
                     with torch.no_grad():
@@ -236,8 +305,9 @@ class Qwen3VLModel(BaseOCRModel):
                         )
                     
                     # Trim generated tokens
+                    input_ids_tensor = inputs.input_ids if hasattr(inputs, 'input_ids') else inputs['input_ids']
                     generated_ids_trimmed = [
-                        out_ids[len(in_ids):] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
+                        out_ids[len(in_seq):] for in_seq, out_ids in zip(input_ids_tensor, generated_ids)
                     ]
                     
                     # Decode output

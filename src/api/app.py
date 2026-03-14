@@ -1,7 +1,8 @@
 """
 FastAPI REST API for PDF OCR with LLMs.
 
-This module provides a REST API for processing PDFs and images using Qwen 2.5 VL models.
+This module provides a REST API for processing PDFs and images using
+Qwen 3 VL, InternVL 3.5, and GLM-OCR models.
 """
 
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException
@@ -26,7 +27,7 @@ logger = logging.getLogger(__name__)
 # Initialize FastAPI app
 app = FastAPI(
     title="PDF OCR with LLMs API",
-    description="REST API for extracting text from PDFs using Qwen 2.5 VL models",
+    description="REST API for extracting text from PDFs and images using Qwen 3 VL, InternVL 3.5, and GLM-OCR",
     version="1.0.0"
 )
 
@@ -68,10 +69,10 @@ async def root():
         "message": "PDF OCR with LLMs API",
         "version": "1.0.0",
         "endpoints": {
-            "models": "/models",
-            "process_pdf": "/process/pdf",
-            "process_image": "/process/image",
-            "batch_process": "/process/batch"
+            "models": "GET /models",
+            "process_pdf": "POST /process/pdf",
+            "process_image": "POST /process/image",
+            "health": "GET /health"
         }
     }
 
@@ -113,11 +114,13 @@ async def process_pdf(
             shutil.copyfileobj(file.file, temp_pdf)
             temp_pdf_path = temp_pdf.name
         
-        # Create temp output file
-        temp_output = tempfile.NamedTemporaryFile(delete=False, suffix=".md")
+        # Output extension: .txt for GLM-OCR, .md for others
+        cfg = pipeline.config_manager.get_model_by_name(model_name)
+        out_ext = ".txt" if (cfg and cfg.get("type") == "glm_ocr") else ".md"
+        temp_output = tempfile.NamedTemporaryFile(delete=False, suffix=out_ext)
         temp_output_path = temp_output.name
         temp_output.close()
-        
+
         # Process PDF
         logger.info(f"Processing PDF with model: {model_name}")
         result = pipeline.process_pdf(
@@ -178,11 +181,13 @@ async def process_image(
             shutil.copyfileobj(file.file, temp_image)
             temp_image_path = temp_image.name
         
-        # Create temp output file
-        temp_output = tempfile.NamedTemporaryFile(delete=False, suffix=".md")
+        # Output extension: .txt for GLM-OCR, .md for others
+        cfg = pipeline.config_manager.get_model_by_name(model_name)
+        out_ext = ".txt" if (cfg and cfg.get("type") == "glm_ocr") else ".md"
+        temp_output = tempfile.NamedTemporaryFile(delete=False, suffix=out_ext)
         temp_output_path = temp_output.name
         temp_output.close()
-        
+
         # Process image
         logger.info(f"Processing image with model: {model_name}")
         result = pipeline.process_image(
