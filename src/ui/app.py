@@ -60,6 +60,32 @@ DEFAULT_EXTRACT_INFO_PROMPT = """{
 # Resize threshold from config (for checkbox label)
 max_image_size_px = pipeline.config_manager.get_ocr_config().get('max_image_size', 1536)
 
+# Per-model generation parameters (temperature, top_p, max_new_tokens, max_new_tokens_slider_max)
+# Used to update the Generation Parameters accordion when the model dropdown changes.
+MODEL_GENERATION_PARAMS = {
+    "qwen3vl": {"temperature": 0.1, "top_p": 0.9, "max_new_tokens": 2048, "max_slider": 4096},
+    "internvl": {"temperature": 0.1, "top_p": 0.9, "max_new_tokens": 2048, "max_slider": 4096},
+    "glm_ocr": {"temperature": 0.1, "top_p": 0.9, "max_new_tokens": 8192, "max_slider": 8192, "show_temp_top_p": False},
+}
+DEFAULT_GENERATION_PARAMS = {"temperature": 0.1, "top_p": 0.9, "max_new_tokens": 2048, "max_slider": 4096, "show_temp_top_p": True}
+
+
+def get_generation_param_updates(model_name):
+    """Return gr.update() for temperature, top_p, max_tokens so the accordion reflects the selected model."""
+    if not model_name:
+        cfg = DEFAULT_GENERATION_PARAMS
+        show_temp = True
+    else:
+        m = pipeline.config_manager.get_model_by_name(model_name)
+        type_key = (m or {}).get("type", "")
+        cfg = MODEL_GENERATION_PARAMS.get(type_key, DEFAULT_GENERATION_PARAMS)
+        show_temp = cfg.get("show_temp_top_p", True)
+    return (
+        gr.update(value=cfg["temperature"], visible=show_temp),
+        gr.update(value=cfg["top_p"], visible=show_temp),
+        gr.update(value=cfg["max_new_tokens"], maximum=cfg["max_slider"], visible=True),
+    )
+
 
 def output_extension_for_model(model_name):
     """Use .txt for GLM-OCR (dedicated OCR); .md for general-purpose VL models."""
@@ -526,7 +552,11 @@ with gr.Blocks(title="PDF OCR with Vision Language Models", theme=custom_theme) 
                 inputs=[pdf_input, pdf_model, pdf_prompt, pdf_temperature, pdf_top_p, pdf_max_tokens, pdf_resize_high_res],
                 outputs=[pdf_output, pdf_status]
             )
-            
+            pdf_model.change(
+                fn=get_generation_param_updates,
+                inputs=[pdf_model],
+                outputs=[pdf_temperature, pdf_top_p, pdf_max_tokens],
+            )
             pdf_output.change(
                 fn=download_result,
                 inputs=[pdf_output, pdf_model],
@@ -596,6 +626,11 @@ with gr.Blocks(title="PDF OCR with Vision Language Models", theme=custom_theme) 
                 fn=process_batch_pdfs,
                 inputs=[batch_input, batch_model, batch_temperature, batch_top_p, batch_max_tokens, batch_resize_high_res],
                 outputs=[batch_download, batch_status]
+            )
+            batch_model.change(
+                fn=get_generation_param_updates,
+                inputs=[batch_model],
+                outputs=[batch_temperature, batch_top_p, batch_max_tokens],
             )
         
         # Image Processing Tab
@@ -781,6 +816,16 @@ You can provide custom prompts for specific extraction tasks:
 """
             
             gr.Markdown(info_markdown)
+
+    # Apply per-model generation params on load (first model in list)
+    def apply_initial_generation_params():
+        u = get_generation_param_updates(available_models[0] if available_models else None)
+        return list(u) + list(u)
+
+    demo.load(
+        fn=apply_initial_generation_params,
+        outputs=[pdf_temperature, pdf_top_p, pdf_max_tokens, batch_temperature, batch_top_p, batch_max_tokens],
+    )
     
     gr.Markdown(
         """
