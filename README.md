@@ -7,13 +7,15 @@ A professional PDF OCR system that leverages state-of-the-art vision-language mo
 - **State-of-the-art Models**: Multiple vision-language model families
   - **Qwen 3 VL**: 4B, 8B, 30B, 235B (general-purpose OCR, markdown output)
   - **InternVL 3.5 Instruct**: 1B, 2B, 4B, 8B, 14B, 30B, 38B, 241B (dynamic tiling, markdown)
-  - **GLM-OCR**: 0.9B (dedicated document OCR; text/formula/table + JSON info extraction)
-- **Web UI**: Gradio interface with PDF, batch PDF, image, and **Extract Info from PDF** tabs
+  - **OCRFlux-3B** (ChatDOC): Qwen2.5-VL based, document-to-markdown; output as structured JSON array per page
+  - **GLM-OCR**: 0.9B (dedicated document OCR; 1 image per call; text/formula/table + JSON info extraction)
+- **Web UI**: Gradio with **PDF Processing**, **Batch PDF**, **Image Processing**, and **Extract Info** tabs
 - **REST API**: FastAPI backend for programmatic access
 - **CLI**: Command-line interface for automation
-- **Batch Processing**: Process multiple PDFs with progress tracking and ZIP download
-- **Extract Info from PDF**: GLM-OCR information extraction with strict JSON schema (e.g. ID cards, forms)
-- **Output Formats**: Markdown (`.md`) for VLMs, plain text (`.txt`) for GLM-OCR, JSON (`.json`) for extract info
+- **Batch Processing**: Multiple PDFs with progress tracking and ZIP download
+- **Extract Info**: Upload 1 PDF (all pages) or multiple images; GLM-OCR runs 1 image per call; compare view (preview left, JSON array right); strict JSON-schema prompts (e.g. ID cards, forms)
+- **Output Formats**: `.md` (VLMs), `.txt` (GLM-OCR OCR), `.json` (OCRFlux full doc or Extract Info)
+- **Per-model generation params**: Temperature/top_p/max tokens in UI adapt by model (e.g. GLM-OCR shows only max tokens)
 - **Custom Prompts**: Flexible prompt engineering for specific tasks
 - **Multi-GPU Support**: Automatic device distribution for large models
 - **Cloud Ready**: Deploy on Kaggle, Colab, or HuggingFace Spaces
@@ -171,13 +173,14 @@ Then open your browser to `http://localhost:7860`
 - `--share` - Create public share link
 
 **Features:**
-- **PDF Processing**: Single PDF, custom prompt, download as `.md` or `.txt` (GLM-OCR)
+- **PDF Processing**: Single PDF, custom prompt, download as `.md`, `.txt` (GLM-OCR), or `.json` (OCRFlux)
 - **Batch PDF Processing**: Multiple PDFs, ZIP download
 - **Image Processing**: Single image with same model and prompt options
-- **Extract Info from PDF**: GLM-OCR only; paste a JSON-schema prompt (e.g. ID card, invoice fields), get structured JSON per page; download as `.json`
-- Select models from dropdown (Qwen3-VL, InternVL 3.5, GLM-OCR)
+- **Extract Info**: Upload **1 PDF** (all pages) or **multiple images**; GLM-OCR only, 1 image per call; paste a JSON-schema prompt (e.g. ID card, invoice); get a single JSON array (one object per page/image); **compare view**: preview gallery left, extracted JSON right; download as `.json`
+- Select models from dropdown (Qwen3-VL, InternVL 3.5, OCRFlux-3B, GLM-OCR)
+- **Generation parameters** in the first two tabs update per model (e.g. GLM-OCR shows only max tokens)
 - Custom prompts support
-- Download as markdown (`.md`), plain text (`.txt` for GLM-OCR), or JSON (extract-info tab)
+- Download as `.md`, `.txt` (GLM-OCR), or `.json` (OCRFlux, Extract Info)
 - Real-time progress tracking for batch processing
 
 ### REST API Only (FastAPI)
@@ -212,7 +215,7 @@ API will be available at `http://localhost:8000`
   - `success`: `true`
   - `model`: model name used
   - `num_pages`: number of pages
-  - `markdown`: extracted text (markdown for VLMs, plain text for GLM-OCR)
+  - `markdown`: extracted text (markdown for VLMs, plain text for GLM-OCR, JSON string for OCRFlux)
   - `processing_time`: (if present) seconds
 
 #### Process image — `POST /process/image`
@@ -353,7 +356,8 @@ pdf-ocr-llm/
     │   ├── base_model.py        # Abstract base class
     │   ├── qwen3vl_model.py     # Qwen 3 VL implementation
     │   ├── internvl_model.py    # InternVL 3.5 Instruct implementation
-    │   ├── glm_ocr_model.py     # GLM-OCR (document + info extraction)
+    │   ├── ocrflux_model.py     # OCRFlux-3B (ChatDOC, markdown/JSON)
+    │   ├── glm_ocr_model.py     # GLM-OCR (1 image per call; document + info extraction)
     │   └── model_factory.py     # Model factory pattern
     ├── processors/
     │   └── pdf_processor.py     # PDF processing utilities
@@ -425,19 +429,26 @@ Dedicated document OCR model (0.9B); not a general-purpose VLM. Output is plain 
 - **Document parsing**: `"Text Recognition:"`, `"Formula Recognition:"`, `"Table Recognition:"`
 - **Information extraction**: Prompts must follow a strict JSON schema (e.g. ID card fields, invoice fields). Use the **Extract Info from PDF** tab in the UI.
 
-When using GLM-OCR for standard OCR, downloads use `.txt`; for extract-info mode, use `.json`.
+When using GLM-OCR for standard OCR, downloads use `.txt`; for **Extract Info**, output is a JSON array (one object per image). GLM-OCR accepts **one image per call**; the app batches by running it once per PDF page or per uploaded image.
 
 > 📚 **Reference**: [GLM-OCR on HuggingFace](https://huggingface.co/zai-org/GLM-OCR)
+
+### OCRFlux-3B (ChatDOC)
+
+Document OCR model (3B, Qwen2.5-VL based); outputs clean markdown. The pipeline returns a **JSON array** (one object per page with fields such as `natural_text`, `primary_language`, `is_table`). Download uses `.json`.
+
+> 📚 **Reference**: [OCRFlux-3B on HuggingFace](https://huggingface.co/ChatDOC/OCRFlux-3B)
 
 **Note:** Qwen 2.5 VL (3B, 7B, 32B, 72B) has been removed in favor of Qwen 3 VL and the current model set. Use `config.yaml` to adjust which models are available.
 
 ### Model selection tips
 
-- **Speed**: InternVL3.5-1B, Qwen3-VL-4B, or GLM-OCR
+- **Speed**: InternVL3.5-1B, Qwen3-VL-4B, OCRFlux-3B, or GLM-OCR
 - **Quality (general OCR)**: Qwen3-VL-8B or InternVL3.5-8B
+- **Document-to-markdown (JSON per page)**: OCRFlux-3B
 - **Best quality**: Qwen3-VL-30B / 235B or InternVL3.5-38B / 241B
 - **High-resolution / tiling**: InternVL 3.5
-- **Structured extraction (forms, ID cards)**: GLM-OCR with a JSON-schema prompt in **Extract Info from PDF**
+- **Structured extraction (forms, ID cards)**: GLM-OCR in **Extract Info** (1 PDF or multiple images; 1 image per call)
 
 ## Multi-GPU Support
 

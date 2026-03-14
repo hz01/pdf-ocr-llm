@@ -1,25 +1,22 @@
-torch>=2.0.0
-transformers>=4.45.0
-pillow>=10.0.0
-pdf2image>=1.16.3
-pyyaml>=6.0
-tqdm>=4.65.0
-accelerate>=0.27.0
+torch
+transformers
+pillow
+pdf2image
+pyyaml
+tqdm
+accelerate
 qwen-vl-utils
-sentencepiece>=0.1.99
-protobuf>=3.20.0
-python-dotenv>=1.0.0
+sentencepiece
+protobuf
+python-dotenv
 
-# API and UI dependencies
-fastapi>=0.104.0
-uvicorn>=0.24.0
-gradio>=4.0.0
-python-multipart>=0.0.6
+# API and UI
+fastapi
+uvicorn
+gradio
+python-multipart
 
 # Optional: Flash Attention 2 for faster inference (requires CUDA)
-# Uncomment and install separately if you have CUDA:
-# flash-attn>=2.3.0
+# pip install flash-attn
 
-# System dependencies (install separately):
-# - poppler-utils (for pdf2image)
-
+# System (install separately): poppler-utils (for pdf2image)
