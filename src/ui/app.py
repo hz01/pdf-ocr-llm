@@ -361,30 +361,31 @@ def process_batch_pdfs(pdf_files, model_name, temperature, top_p, max_tokens, re
 def clean_extract_info_output(text):
     """
     Strip non-JSON cruft from GLM-OCR extract-info output:
-    '# Page N' headers, ```json/``` fences (3+ backticks), trailing special tokens (<|user|>, etc.).
+    '# Page N' headers, ```json/``` fences, trailing <|user|>. Unwrap first, then strip rest.
     """
     import re
     if not text or not text.strip():
         return text
     text = text.strip()
-    # Strip trailing special tokens and any trailing backticks (model may emit <|user|> or ```<|user|>)
-    text = re.sub(r"<\|[^|]+\|>\s*$", "", text)
-    text = re.sub(r"`+\s*$", "", text.strip())
-    text = text.strip()
-    # Strip leading "# Page N" lines
+    # Strip leading "# Page N" lines before unwrap
     text = re.sub(r"^#\s*Page\s+\d+\s*\n*", "", text, flags=re.IGNORECASE)
     text = text.strip()
-    # Unwrap code blocks: 3+ backticks, optional "json", then content, then 3+ backticks
+    # Unwrap first (so we don't strip closing ``` before matching).
+    # Allow closing ``` to be followed by optional <|user|> so we still match.
     def unwrap_code_blocks(s):
         out = []
-        for m in re.finditer(r"`{3,}(?:json)?\s*\n?(.*?)`{3,}", s, re.DOTALL):
+        # Match ```json?\n? content ``` optional <|user|>
+        for m in re.finditer(
+            r"`{3,}(?:json)?\s*\n?(.*?)`{3,}(?:\s*<\|[^|]+\|>)?\s*", s, re.DOTALL
+        ):
             out.append(m.group(1).strip())
         if out:
             return "\n\n".join(out)
         return s
     text = unwrap_code_blocks(text)
     text = text.strip()
-    # If still starts with backticks or "json" (no match above), strip them
+    # Strip any remaining trailing/leading cruft (backticks, tokens)
+    text = re.sub(r"<\|[^|]+\|>\s*$", "", text)
     text = re.sub(r"^`+(?:json)?\s*\n?", "", text)
     text = re.sub(r"`+\s*$", "", text)
     return text.strip()
