@@ -15,6 +15,10 @@ services:
               count: all
               capabilities: [gpu]
     
+    ports:
+      - "7860:7860"   # Gradio UI
+      - "8000:8000"   # FastAPI
+    
     volumes:
       # Mount input/output directories
       - ./input:/app/input
@@ -25,9 +29,6 @@ services:
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
       - TRANSFORMERS_CACHE=/app/.cache/huggingface
-    
-    # Override command to process files from input directory
-    command: python main.py batch --model "Qwen3-VL-4B-Instruct" --input-dir /app/input --output-dir /app/output
     
     # Keep container running for interactive use
     # stdin_open: true
